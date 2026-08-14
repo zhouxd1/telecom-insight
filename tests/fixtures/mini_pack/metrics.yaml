@@ -1,0 +1,5 @@
+- name: arpu
+  label: ARPU
+  description: 月均每用户收入
+  dimensions: [month, region]
+  sql_hint: "AVG(arpu)"

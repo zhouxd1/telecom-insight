@@ -1,0 +1,3 @@
+- term: ARPU
+  standard: 每用户平均收入
+  maps_to: users.arpu

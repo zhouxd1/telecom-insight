@@ -1,0 +1,2 @@
+- question: 上月ARPU是多少
+  sql: "SELECT month, AVG(arpu) AS arpu FROM mini.users GROUP BY month"
