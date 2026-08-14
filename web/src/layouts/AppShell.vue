@@ -5,10 +5,27 @@
         <img src="/logo.svg" alt="元景.智数" class="logo" />
         <div class="brand-text">
           <strong>元景.智数</strong>
-          <span>运营商智能问数</span>
+          <span>{{ me?.org_name || "运营商智能问数" }}</span>
         </div>
+        <span v-if="me" class="role-badge" :title="roleLabel">{{ me.org_role }}</span>
       </div>
-      <button type="button" class="logout" @click="logout">退出</button>
+
+      <div class="topbar-actions">
+        <label class="workspace-switcher">
+          <span class="sr-only">工作空间</span>
+          <select
+            :value="workspaceId ?? ''"
+            :disabled="!workspaces.length"
+            @change="onWorkspaceChange"
+          >
+            <option v-if="!workspaces.length" value="" disabled>无可用空间</option>
+            <option v-for="ws in workspaces" :key="ws.id" :value="ws.id">
+              {{ ws.name }}
+            </option>
+          </select>
+        </label>
+        <button type="button" class="logout" @click="logout">退出</button>
+      </div>
     </header>
 
     <div class="body">
@@ -24,48 +41,88 @@
           <span class="nav-bar" aria-hidden="true" />
           {{ item.label }}
         </RouterLink>
-
-        <p class="nav-group">即将推出</p>
-        <button
-          v-for="item in comingSoon"
-          :key="item"
-          type="button"
-          class="nav-item disabled"
-          disabled
-          :title="`${item} · 即将推出`"
-        >
-          <span class="nav-bar muted" aria-hidden="true" />
-          <span>{{ item }}</span>
-          <em>即将推出</em>
-        </button>
       </aside>
 
       <main class="content">
-        <RouterView />
+        <RouterView :key="workspaceId ?? 'none'" />
       </main>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed, onMounted, provide, ref, type Ref } from "vue";
 import { RouterLink, RouterView, useRouter } from "vue-router";
-import { clearToken } from "../api";
+import {
+  clearToken,
+  fetchMe,
+  getWorkspaceId,
+  setWorkspaceId as persistWorkspaceId,
+  type MeResponse,
+} from "../api";
 
 const router = useRouter();
 
+const me = ref<MeResponse | null>(null);
+const workspaceId = ref<number | null>(getWorkspaceId());
+
+const meRef = me as Ref<MeResponse | null>;
+provide("me", meRef);
+provide("workspaceId", workspaceId);
+
+const workspaces = computed(() => me.value?.workspaces ?? []);
+
+const roleLabel = computed(() => {
+  const role = me.value?.org_role;
+  if (role === "org_admin") return "组织管理员";
+  if (role === "analyst") return "分析师";
+  if (role === "viewer") return "只读";
+  return role || "";
+});
+
 const primaryNav = [
   { to: "/app/chat", label: "问数工作台" },
+  { to: "/app/datasources", label: "数据源" },
+  { to: "/app/workspaces", label: "工作空间" },
+  { to: "/app/users", label: "用户" },
   { to: "/app/models", label: "模型配置" },
   { to: "/app/terms", label: "术语库" },
   { to: "/app/examples", label: "SQL 示例" },
 ] as const;
 
-const comingSoon = ["数据源", "工作空间", "用户"] as const;
+async function loadMe() {
+  me.value = await fetchMe();
+  const list = me.value.workspaces;
+  if (!list.length) {
+    workspaceId.value = null;
+    persistWorkspaceId(null);
+    return;
+  }
+  const current = workspaceId.value;
+  const stillValid = current != null && list.some((w) => w.id === current);
+  if (!stillValid) {
+    workspaceId.value = list[0].id;
+    persistWorkspaceId(list[0].id);
+  }
+}
+
+function onWorkspaceChange(event: Event) {
+  const select = event.target as HTMLSelectElement;
+  const id = Number(select.value);
+  if (!Number.isFinite(id)) return;
+  workspaceId.value = id;
+  persistWorkspaceId(id);
+}
 
 function logout() {
   clearToken();
+  persistWorkspaceId(null);
   void router.replace({ name: "login" });
 }
+
+onMounted(() => {
+  void loadMe();
+});
 </script>
 
 <style scoped>
@@ -92,6 +149,7 @@ function logout() {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  min-width: 0;
 }
 
 .logo {
@@ -116,6 +174,58 @@ function logout() {
   font-size: 0.72rem;
   color: var(--muted);
   font-weight: 400;
+}
+
+.role-badge {
+  flex-shrink: 0;
+  margin-left: 0.15rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 500;
+  padding: 0.15rem 0.45rem;
+  letter-spacing: 0.02em;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.workspace-switcher select {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.65rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  min-width: 9rem;
+  max-width: 16rem;
+}
+
+.workspace-switcher select:hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+
+.workspace-switcher select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .logout {
@@ -179,29 +289,13 @@ function logout() {
   transition: background 120ms ease, color 120ms ease;
 }
 
-.nav-item:hover:not(.disabled) {
+.nav-item:hover {
   background: var(--surface-muted);
 }
 
 .nav-item.active {
   background: var(--accent-soft);
   color: var(--accent-ink);
-}
-
-.nav-item.disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.nav-item em {
-  margin-left: auto;
-  font-style: normal;
-  font-size: 0.65rem;
-  color: var(--muted);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 0.08rem 0.35rem;
-  font-weight: 500;
 }
 
 .nav-bar {
@@ -214,10 +308,6 @@ function logout() {
 
 .nav-item.active .nav-bar {
   background: var(--accent);
-}
-
-.nav-bar.muted {
-  background: var(--line-strong);
 }
 
 .content {
@@ -242,6 +332,16 @@ function logout() {
   .nav-group {
     width: 100%;
     margin: 0.25rem 0.4rem;
+  }
+
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 0.65rem 1rem;
+  }
+
+  .workspace-switcher select {
+    min-width: 7rem;
   }
 }
 </style>

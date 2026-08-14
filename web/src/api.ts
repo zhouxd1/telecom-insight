@@ -1,11 +1,74 @@
 import axios, { AxiosError } from "axios";
 
 const TOKEN_KEY = "ti_token";
+const WORKSPACE_KEY = "ti_workspace_id";
 
 export type DomainInfo = {
   id: string;
   name: string;
   version: string;
+};
+
+export type WorkspaceSummary = {
+  id: number;
+  name: string;
+  role: string;
+  domains: string[];
+};
+
+export type MeResponse = {
+  id: number;
+  username: string;
+  display_name: string;
+  org_id: number;
+  org_name: string;
+  org_role: string;
+  workspaces: WorkspaceSummary[];
+};
+
+export type Workspace = {
+  id: number;
+  org_id: number;
+  name: string;
+  status: string;
+  created_at: string;
+};
+
+export type WorkspaceMember = {
+  id: number;
+  workspace_id: number;
+  user_id: number;
+  role: string;
+  domains: string[];
+};
+
+export type OrgUser = {
+  id: number;
+  org_id: number;
+  username: string;
+  display_name: string;
+  org_role: string;
+  enabled: boolean;
+};
+
+export type Datasource = {
+  id: number;
+  workspace_id: number;
+  name: string;
+  db_type: string;
+  host: string;
+  port?: number | null;
+  database: string;
+  username: string;
+  extra_json?: Record<string, unknown> | null;
+  is_default: boolean;
+  last_ok_at?: string | null;
+  last_error?: string | null;
+};
+
+export type DatasourceTestResult = {
+  ok: boolean;
+  error?: string | null;
 };
 
 export type RecommendedItem = {
@@ -101,6 +164,10 @@ client.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  const workspaceId = getWorkspaceId();
+  if (workspaceId != null) {
+    config.headers["X-Workspace-Id"] = String(workspaceId);
+  }
   return config;
 });
 
@@ -114,6 +181,21 @@ export function setToken(token: string): void {
 
 export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
+}
+
+export function getWorkspaceId(): number | null {
+  const raw = localStorage.getItem(WORKSPACE_KEY);
+  if (!raw) return null;
+  const id = Number(raw);
+  return Number.isFinite(id) ? id : null;
+}
+
+export function setWorkspaceId(id: number | null): void {
+  if (id == null) {
+    localStorage.removeItem(WORKSPACE_KEY);
+    return;
+  }
+  localStorage.setItem(WORKSPACE_KEY, String(id));
 }
 
 export function friendlyError(err: unknown): string {
@@ -143,7 +225,146 @@ export async function login(username: string, password: string): Promise<string>
     password,
   });
   setToken(data.access_token);
+  const me = await fetchMe();
+  if (me.workspaces.length > 0) {
+    setWorkspaceId(me.workspaces[0].id);
+  }
   return data.access_token;
+}
+
+export async function fetchMe(): Promise<MeResponse> {
+  const { data } = await client.get<MeResponse>("/auth/me");
+  return data;
+}
+
+export async function listWorkspaces(): Promise<Workspace[]> {
+  const { data } = await client.get<Workspace[]>("/workspaces");
+  return data;
+}
+
+export async function createWorkspace(body: { name: string }): Promise<Workspace> {
+  const { data } = await client.post<Workspace>("/workspaces", body);
+  return data;
+}
+
+export async function archiveWorkspace(workspaceId: number): Promise<Workspace> {
+  const { data } = await client.patch<Workspace>(`/workspaces/${workspaceId}`, {
+    status: "archived",
+  });
+  return data;
+}
+
+export async function listMembers(workspaceId: number): Promise<WorkspaceMember[]> {
+  const { data } = await client.get<WorkspaceMember[]>(`/workspaces/${workspaceId}/members`);
+  return data;
+}
+
+export async function addMember(
+  workspaceId: number,
+  body: { user_id: number; role: string; domains?: string[] },
+): Promise<WorkspaceMember> {
+  const { data } = await client.post<WorkspaceMember>(
+    `/workspaces/${workspaceId}/members`,
+    body,
+  );
+  return data;
+}
+
+export async function updateMember(
+  workspaceId: number,
+  userId: number,
+  body: Partial<{ role: string; domains: string[] }>,
+): Promise<WorkspaceMember> {
+  const { data } = await client.patch<WorkspaceMember>(
+    `/workspaces/${workspaceId}/members/${userId}`,
+    body,
+  );
+  return data;
+}
+
+export async function removeMember(workspaceId: number, userId: number): Promise<void> {
+  await client.delete(`/workspaces/${workspaceId}/members/${userId}`);
+}
+
+export async function listUsers(): Promise<OrgUser[]> {
+  const { data } = await client.get<OrgUser[]>("/admin/users");
+  return data;
+}
+
+export async function createUser(body: {
+  username: string;
+  password: string;
+  display_name?: string;
+  org_role?: string;
+  enabled?: boolean;
+}): Promise<OrgUser> {
+  const { data } = await client.post<OrgUser>("/admin/users", body);
+  return data;
+}
+
+export async function updateUser(
+  userId: number,
+  body: Partial<{
+    display_name: string;
+    org_role: string;
+    enabled: boolean;
+    password: string;
+  }>,
+): Promise<OrgUser> {
+  const { data } = await client.patch<OrgUser>(`/admin/users/${userId}`, body);
+  return data;
+}
+
+export async function listDatasources(): Promise<Datasource[]> {
+  const { data } = await client.get<Datasource[]>("/admin/datasources");
+  return data;
+}
+
+export async function createDatasource(body: {
+  name: string;
+  db_type: string;
+  host?: string;
+  port?: number | null;
+  database?: string;
+  username?: string;
+  password?: string;
+  extra_json?: Record<string, unknown> | null;
+  is_default?: boolean;
+}): Promise<Datasource> {
+  const { data } = await client.post<Datasource>("/admin/datasources", body);
+  return data;
+}
+
+export async function updateDatasource(
+  id: number,
+  body: Partial<{
+    name: string;
+    db_type: string;
+    host: string;
+    port: number | null;
+    database: string;
+    username: string;
+    password: string;
+    extra_json: Record<string, unknown> | null;
+    is_default: boolean;
+  }>,
+): Promise<Datasource> {
+  const { data } = await client.patch<Datasource>(`/admin/datasources/${id}`, body);
+  return data;
+}
+
+export async function testDatasource(id: number): Promise<DatasourceTestResult> {
+  const { data } = await client.post<DatasourceTestResult>(`/admin/datasources/${id}/test`);
+  return data;
+}
+
+export async function setDefaultDatasource(id: number): Promise<Datasource> {
+  const { data } = await client.post<Datasource>(`/admin/datasources/${id}/default`);
+  return data;
+}
+
+export async function deleteDatasource(id: number): Promise<void> {
+  await client.delete(`/admin/datasources/${id}`);
 }
 
 export async function listDomains(): Promise<DomainInfo[]> {
