@@ -1,0 +1,15 @@
+- term: 小区流量
+  standard: 小区小时流量（GB）
+  maps_to: network.cell_hour.traffic_gb
+- term: 可用率
+  standard: 小区可用性比率
+  maps_to: network.cell_hour.avail_rate
+- term: 告警次数
+  standard: 日告警总量
+  maps_to: network.alarm_day.alarm_cnt
+- term: 严重告警
+  standard: 日严重告警数
+  maps_to: network.alarm_day.critical_cnt
+- term: 小区
+  standard: 无线小区标识
+  maps_to: network.cell_hour.cell_id

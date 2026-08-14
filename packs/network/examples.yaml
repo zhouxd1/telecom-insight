@@ -1,0 +1,12 @@
+- question: 2026年1月流量最高的小区TOP5
+  sql: "SELECT cell_id, SUM(traffic_gb) AS traffic_gb FROM network.cell_hour WHERE hour >= '2026-01-01' AND hour < '2026-02-01' GROUP BY cell_id ORDER BY traffic_gb DESC LIMIT 5"
+- question: 各小区平均可用率对比
+  sql: "SELECT cell_id, AVG(avail_rate) AS avail_rate FROM network.cell_hour GROUP BY cell_id ORDER BY avail_rate ASC"
+- question: 2026年2月每日告警总量走势
+  sql: "SELECT day, SUM(alarm_cnt) AS alarm_cnt FROM network.alarm_day WHERE day BETWEEN '2026-02-01' AND '2026-02-28' GROUP BY day ORDER BY day"
+- question: 严重告警占比最高的日期
+  sql: "SELECT day, critical_cnt, alarm_cnt, ROUND(critical_cnt::numeric / NULLIF(alarm_cnt, 0), 4) AS critical_ratio FROM network.alarm_day ORDER BY critical_ratio DESC NULLS LAST LIMIT 10"
+- question: 忙时（10点至12点）小区流量汇总
+  sql: "SELECT cell_id, SUM(traffic_gb) AS traffic_gb FROM network.cell_hour WHERE EXTRACT(HOUR FROM hour) BETWEEN 10 AND 12 GROUP BY cell_id ORDER BY traffic_gb DESC"
+- question: 3月相对1月告警是否下降
+  sql: "SELECT DATE_TRUNC('month', day)::date AS month, SUM(alarm_cnt) AS alarm_cnt, SUM(critical_cnt) AS critical_cnt FROM network.alarm_day WHERE day BETWEEN '2026-01-01' AND '2026-03-31' GROUP BY 1 ORDER BY 1"

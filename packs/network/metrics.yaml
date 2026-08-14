@@ -1,0 +1,20 @@
+- name: traffic_gb
+  label: 小区流量
+  description: 小区按小时统计的下行/综合流量（GB）
+  dimensions: [hour, cell_id]
+  sql_hint: "SUM(traffic_gb)"
+- name: avail_rate
+  label: 可用率
+  description: 小区小时可用性，取值 0~1
+  dimensions: [hour, cell_id]
+  sql_hint: "AVG(avail_rate)"
+- name: alarm_cnt
+  label: 告警次数
+  description: 按日汇总的网络告警条数
+  dimensions: [day]
+  sql_hint: "SUM(alarm_cnt)"
+- name: critical_cnt
+  label: 严重告警数
+  description: 按日汇总的严重级别告警条数
+  dimensions: [day]
+  sql_hint: "SUM(critical_cnt)"

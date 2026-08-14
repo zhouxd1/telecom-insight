@@ -1,0 +1,15 @@
+- term: 工单量
+  standard: 日工单数量
+  maps_to: cs.ticket_day.ticket_cnt
+- term: 工单类型
+  standard: 客服工单业务分类
+  maps_to: cs.ticket_day.ticket_type
+- term: CSAT
+  standard: 客户满意度评分
+  maps_to: cs.ticket_day.csat
+- term: 重复投诉
+  standard: 月重复投诉次数
+  maps_to: cs.repeat_month.repeat_cnt
+- term: 满意度
+  standard: 客户满意度（CSAT）
+  maps_to: cs.ticket_day.csat

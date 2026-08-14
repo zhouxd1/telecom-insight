@@ -1,0 +1,20 @@
+- name: arpu
+  label: ARPU
+  description: 月末在网用户的月均每用户收入
+  dimensions: [month, region]
+  sql_hint: "AVG(arpu)"
+- name: revenue
+  label: 出账收入
+  description: 按月按区域汇总的出账收入
+  dimensions: [month, region]
+  sql_hint: "SUM(revenue)"
+- name: sub_cnt
+  label: 在网用户数
+  description: 月末在网用户规模
+  dimensions: [month, region]
+  sql_hint: "SUM(sub_cnt)"
+- name: new_users
+  label: 渠道新增
+  description: 按日按渠道统计的新增用户
+  dimensions: [day, channel]
+  sql_hint: "SUM(new_users)"

@@ -1,0 +1,15 @@
+- term: ARPU
+  standard: 每用户平均收入
+  maps_to: biz.sub_month.arpu
+- term: 出账收入
+  standard: 月度出账收入
+  maps_to: biz.sub_month.revenue
+- term: 在网用户
+  standard: 月末在网用户数
+  maps_to: biz.sub_month.sub_cnt
+- term: 渠道日新增
+  standard: 渠道日新增用户数
+  maps_to: biz.channel_day.new_users
+- term: 地市
+  standard: 业务归属区域
+  maps_to: biz.sub_month.region

@@ -1,0 +1,12 @@
+- question: 2026年1月各工单类型总量
+  sql: "SELECT ticket_type, SUM(ticket_cnt) AS ticket_cnt FROM cs.ticket_day WHERE day BETWEEN '2026-01-01' AND '2026-01-31' GROUP BY ticket_type ORDER BY ticket_cnt DESC"
+- question: 近三个月平均满意度趋势
+  sql: "SELECT DATE_TRUNC('month', day)::date AS month, AVG(csat) AS avg_csat FROM cs.ticket_day WHERE day BETWEEN '2026-01-01' AND '2026-03-31' GROUP BY 1 ORDER BY 1"
+- question: 哪类工单满意度最低
+  sql: "SELECT ticket_type, AVG(csat) AS avg_csat, SUM(ticket_cnt) AS ticket_cnt FROM cs.ticket_day GROUP BY ticket_type ORDER BY avg_csat ASC"
+- question: 一季度各月重复投诉量
+  sql: "SELECT DATE_TRUNC('month', month)::date AS month, SUM(repeat_cnt) AS repeat_cnt FROM cs.repeat_month WHERE month BETWEEN '2026-01-01' AND '2026-03-31' GROUP BY 1 ORDER BY 1"
+- question: 网络故障类工单2月每日走势
+  sql: "SELECT day, SUM(ticket_cnt) AS ticket_cnt FROM cs.ticket_day WHERE ticket_type = '网络故障' AND day BETWEEN '2026-02-01' AND '2026-02-28' GROUP BY day ORDER BY day"
+- question: 满意度低于4分的工单类型与日期
+  sql: "SELECT day, ticket_type, csat, ticket_cnt FROM cs.ticket_day WHERE csat < 4.0 ORDER BY csat ASC, day DESC LIMIT 20"

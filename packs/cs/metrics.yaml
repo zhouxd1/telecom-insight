@@ -1,0 +1,15 @@
+- name: ticket_cnt
+  label: 工单量
+  description: 按日按类型统计的客服工单数量
+  dimensions: [day, ticket_type]
+  sql_hint: "SUM(ticket_cnt)"
+- name: csat
+  label: CSAT
+  description: 客户满意度评分，取值通常为 1~5
+  dimensions: [day, ticket_type]
+  sql_hint: "AVG(csat)"
+- name: repeat_cnt
+  label: 重复投诉量
+  description: 按月统计的重复投诉次数
+  dimensions: [month]
+  sql_hint: "SUM(repeat_cnt)"

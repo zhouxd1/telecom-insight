@@ -1,0 +1,5 @@
+domain: cs
+version: 0.1.0
+engine_compat: ">=0.1.0"
+schemas: [cs]
+tables: [ticket_day, repeat_month]

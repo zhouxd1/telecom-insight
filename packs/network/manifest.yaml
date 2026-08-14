@@ -1,0 +1,5 @@
+domain: network
+version: 0.1.0
+engine_compat: ">=0.1.0"
+schemas: [network]
+tables: [cell_hour, alarm_day]

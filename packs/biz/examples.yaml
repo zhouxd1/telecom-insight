@@ -1,0 +1,12 @@
+- question: 2026年1月各地市ARPU是多少
+  sql: "SELECT region, AVG(arpu) AS arpu FROM biz.sub_month WHERE month = '2026-01-01' GROUP BY region ORDER BY arpu DESC"
+- question: 2026年一季度各月出账收入合计
+  sql: "SELECT month, SUM(revenue) AS revenue FROM biz.sub_month WHERE month BETWEEN '2026-01-01' AND '2026-03-01' GROUP BY month ORDER BY month"
+- question: 哪个地市在网用户最多
+  sql: "SELECT region, SUM(sub_cnt) AS sub_cnt FROM biz.sub_month GROUP BY region ORDER BY sub_cnt DESC LIMIT 5"
+- question: 各渠道近三个月日均新增用户
+  sql: "SELECT channel, AVG(new_users) AS avg_new_users FROM biz.channel_day WHERE day BETWEEN '2026-01-01' AND '2026-03-31' GROUP BY channel ORDER BY avg_new_users DESC"
+- question: 营业厅渠道2026年2月新增用户走势
+  sql: "SELECT day, SUM(new_users) AS new_users FROM biz.channel_day WHERE channel = '营业厅' AND day BETWEEN '2026-02-01' AND '2026-02-28' GROUP BY day ORDER BY day"
+- question: 收入最高的地市TOP3
+  sql: "SELECT region, SUM(revenue) AS revenue FROM biz.sub_month GROUP BY region ORDER BY revenue DESC LIMIT 3"

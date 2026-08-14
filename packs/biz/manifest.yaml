@@ -1,0 +1,5 @@
+domain: biz
+version: 0.1.0
+engine_compat: ">=0.1.0"
+schemas: [biz]
+tables: [sub_month, channel_day]
