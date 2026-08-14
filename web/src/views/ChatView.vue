@@ -2,14 +2,25 @@
   <div class="chatbi">
     <aside class="session-pane">
       <div class="session-toolbar">
-        <button type="button" class="new-btn" @click="onCreateSession">新建对话</button>
-        <select v-model="createDomain" class="domain-select" aria-label="新建会话业务域">
-          <option v-for="d in domainOptions" :key="d.id" :value="d.id">{{ d.label }}</option>
-        </select>
+        <p v-if="isViewer" class="viewer-banner" role="status">只读账号，仅可浏览历史</p>
+        <template v-else>
+          <button type="button" class="new-btn" @click="onCreateSession">新建对话</button>
+          <select v-model="createDomain" class="domain-select" aria-label="新建会话业务域">
+            <option v-for="d in allowedDomainOptions" :key="d.id" :value="d.id">{{ d.label }}</option>
+          </select>
+        </template>
       </div>
 
       <div v-if="sessionsLoading" class="pane-hint">加载会话…</div>
-      <div v-else-if="!sessions.length" class="pane-hint">暂无会话，点击上方新建。</div>
+      <div v-else-if="!sessions.length" class="pane-hint">
+        {{
+          !hasDefaultDatasource
+            ? "请先配置默认数据源。"
+            : isViewer
+              ? "暂无会话历史。"
+              : "暂无会话，点击上方新建。"
+        }}
+      </div>
 
       <ul v-else class="session-list" role="listbox" aria-label="会话列表">
         <li
@@ -25,7 +36,7 @@
             <strong>{{ s.title || "新会话" }}</strong>
             <span class="domain-badge">{{ domainLabel(s.domain) }}</span>
           </div>
-          <div class="session-actions" @click.stop>
+          <div v-if="!isViewer" class="session-actions" @click.stop>
             <button type="button" class="icon-btn" title="重命名" @click="onRename(s)">改</button>
             <button type="button" class="icon-btn danger" title="删除" @click="onDelete(s)">删</button>
           </div>
@@ -46,18 +57,40 @@
       </header>
 
       <div ref="threadEl" class="thread" aria-live="polite">
-        <div v-if="!activeSessionId" class="empty-state">
+        <div
+          v-if="!hasDefaultDatasource && (!activeSessionId || (!messagesLoading && !threadItems.length))"
+          class="empty-state"
+        >
+          <img src="/logo.svg" alt="" class="empty-logo" />
+          <h2>尚未配置默认数据源</h2>
+          <p>请先添加数据源并设为默认，才能开始问数。</p>
+          <RouterLink to="/app/datasources" class="cta-link">前往数据源</RouterLink>
+        </div>
+
+        <div v-else-if="!activeSessionId" class="empty-state">
           <img src="/logo.svg" alt="" class="empty-logo" />
           <h2>元景.智数</h2>
-          <p>用自然语言探查经营、网络与客服数据。</p>
+          <p>
+            {{
+              isViewer
+                ? "请从左侧选择历史会话进行浏览。"
+                : "用自然语言探查经营、网络与客服数据。"
+            }}
+          </p>
         </div>
 
         <div v-else-if="messagesLoading" class="empty-state soft">加载消息…</div>
 
         <div v-else-if="!threadItems.length" class="empty-state">
           <img src="/logo.svg" alt="" class="empty-logo" />
-          <h2>开始一段新对话</h2>
-          <p>选择推荐问题，或在下方输入业务问题。</p>
+          <h2>{{ isViewer ? "暂无消息" : "开始一段新对话" }}</h2>
+          <p>
+            {{
+              isViewer
+                ? "该会话尚无历史消息。"
+                : "选择推荐问题，或在下方输入业务问题。"
+            }}
+          </p>
         </div>
 
         <template v-else>
@@ -76,7 +109,7 @@
         </div>
       </div>
 
-      <footer class="composer">
+      <footer v-if="!isViewer && hasDefaultDatasource" class="composer">
         <div v-if="recommended.length" class="chips" aria-label="推荐提问">
           <button
             v-for="item in recommended"
@@ -106,21 +139,25 @@
           </div>
         </form>
       </footer>
+      <div v-else-if="errorNote" class="error-strip" role="alert">{{ errorNote }}</div>
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { computed, inject, nextTick, onMounted, ref, watch, type Ref } from "vue";
+import { RouterLink } from "vue-router";
 import {
   askInSession,
   createSession,
   deleteSession,
   friendlyError,
+  listDatasources,
   listMessages,
   listRecommended,
   listSessions,
   updateSession,
+  type MeResponse,
 } from "../api";
 import type { AskResponse, ChatMessage, ChatSession, RecommendedItem } from "../api";
 import AssistantCard from "../components/AssistantCard.vue";
@@ -132,11 +169,14 @@ type ThreadItem = {
   result?: AskResponse;
 };
 
-const domainOptions = [
+const ALL_DOMAIN_OPTIONS = [
   { id: "biz", label: "经营" },
   { id: "network", label: "网络" },
   { id: "cs", label: "客服" },
 ] as const;
+
+const me = inject<Ref<MeResponse | null>>("me", ref(null));
+const workspaceId = inject<Ref<number | null>>("workspaceId", ref(null));
 
 const sessions = ref<ChatSession[]>([]);
 const sessionsLoading = ref(false);
@@ -149,6 +189,27 @@ const question = ref("");
 const asking = ref(false);
 const errorNote = ref("");
 const threadEl = ref<HTMLElement | null>(null);
+const hasDefaultDatasource = ref(true);
+const bootstrapDone = ref(false);
+
+const currentWorkspace = computed(
+  () => me.value?.workspaces.find((w) => w.id === workspaceId.value) ?? null,
+);
+
+const isOrgAdmin = computed(() => me.value?.org_role === "org_admin");
+
+const effectiveRole = computed(() => {
+  if (isOrgAdmin.value) return "org_admin";
+  return currentWorkspace.value?.role ?? "";
+});
+
+const isViewer = computed(() => effectiveRole.value === "viewer");
+
+const allowedDomainOptions = computed(() => {
+  if (isOrgAdmin.value) return [...ALL_DOMAIN_OPTIONS];
+  const domains = currentWorkspace.value?.domains ?? [];
+  return ALL_DOMAIN_OPTIONS.filter((d) => domains.includes(d.id));
+});
 
 const activeSession = computed(
   () => sessions.value.find((s) => s.id === activeSessionId.value) ?? null,
@@ -191,13 +252,31 @@ const threadItems = computed<ThreadItem[]>(() =>
 );
 
 function domainLabel(domain: string): string {
-  return domainOptions.find((d) => d.id === domain)?.label ?? domain;
+  return ALL_DOMAIN_OPTIONS.find((d) => d.id === domain)?.label ?? domain;
+}
+
+function syncCreateDomain() {
+  const opts = allowedDomainOptions.value;
+  if (!opts.length) return;
+  if (!opts.some((d) => d.id === createDomain.value)) {
+    createDomain.value = opts[0].id;
+  }
 }
 
 async function scrollThread() {
   await nextTick();
   if (threadEl.value) {
     threadEl.value.scrollTop = threadEl.value.scrollHeight;
+  }
+}
+
+async function checkDatasource() {
+  try {
+    const list = await listDatasources();
+    hasDefaultDatasource.value = list.some((d) => d.is_default);
+  } catch (err) {
+    hasDefaultDatasource.value = false;
+    errorNote.value = friendlyError(err);
   }
 }
 
@@ -251,7 +330,9 @@ async function selectSession(id: number) {
 }
 
 async function onCreateSession() {
+  if (isViewer.value || !hasDefaultDatasource.value) return;
   errorNote.value = "";
+  syncCreateDomain();
   try {
     const created = await createSession(createDomain.value, "新会话");
     await refreshSessions(created.id);
@@ -261,6 +342,7 @@ async function onCreateSession() {
 }
 
 async function onRename(session: ChatSession) {
+  if (isViewer.value) return;
   const next = window.prompt("重命名会话", session.title || "新会话");
   if (next == null) return;
   const title = next.trim();
@@ -274,6 +356,7 @@ async function onRename(session: ChatSession) {
 }
 
 async function onDelete(session: ChatSession) {
+  if (isViewer.value) return;
   if (!window.confirm(`确认删除会话「${session.title || "新会话"}」？`)) return;
   try {
     await deleteSession(session.id);
@@ -288,6 +371,7 @@ async function onDelete(session: ChatSession) {
 }
 
 async function sendAsk() {
+  if (isViewer.value || !hasDefaultDatasource.value) return;
   const q = question.value.trim();
   const sid = activeSessionId.value;
   if (!q || !sid || asking.value) return;
@@ -314,6 +398,22 @@ async function askRecommended(text: string) {
   await sendAsk();
 }
 
+async function bootstrap() {
+  syncCreateDomain();
+  await checkDatasource();
+  await refreshSessions();
+  if (!hasDefaultDatasource.value || isViewer.value) return;
+  if (sessions.value.length) return;
+  syncCreateDomain();
+  if (!allowedDomainOptions.value.length) return;
+  try {
+    const created = await createSession(createDomain.value, "新会话");
+    await refreshSessions(created.id);
+  } catch (err) {
+    errorNote.value = friendlyError(err);
+  }
+}
+
 watch(activeSessionId, (id) => {
   if (id == null) {
     messages.value = [];
@@ -327,15 +427,30 @@ watch(activeSessionId, (id) => {
   }
 });
 
+watch(allowedDomainOptions, () => {
+  syncCreateDomain();
+});
+
+watch(
+  () => [me.value?.id, workspaceId.value] as const,
+  async ([userId, wsId], prev) => {
+    if (userId == null || wsId == null) return;
+    const prevUser = prev?.[0];
+    const prevWs = prev?.[1];
+    if (bootstrapDone.value && userId === prevUser && wsId === prevWs) return;
+    bootstrapDone.value = true;
+    await bootstrap();
+  },
+);
+
 onMounted(async () => {
-  await refreshSessions();
-  if (!sessions.value.length) {
-    try {
-      const created = await createSession(createDomain.value, "新会话");
-      await refreshSessions(created.id);
-    } catch (err) {
-      errorNote.value = friendlyError(err);
-    }
+  if (me.value != null && workspaceId.value != null) {
+    bootstrapDone.value = true;
+    await bootstrap();
+  } else {
+    // Datasource check can run even before me resolves
+    await checkDatasource();
+    await refreshSessions();
   }
 });
 </script>
@@ -363,6 +478,18 @@ onMounted(async () => {
 .session-toolbar {
   display: grid;
   gap: 0.5rem;
+}
+
+.viewer-banner {
+  margin: 0;
+  padding: 0.55rem 0.65rem;
+  border-radius: var(--radius);
+  border: 1px solid #ccfbf1;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.4;
 }
 
 .new-btn {
@@ -561,6 +688,24 @@ onMounted(async () => {
   line-height: 1.55;
 }
 
+.cta-link {
+  display: inline-flex;
+  margin-top: 1.1rem;
+  padding: 0.5rem 0.95rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.cta-link:hover {
+  background: #d5f5ef;
+  border-color: var(--accent-ink);
+}
+
 .msg-row {
   display: flex;
   width: 100%;
@@ -622,6 +767,14 @@ onMounted(async () => {
   padding: 1rem 1.5rem 1.15rem;
   display: grid;
   gap: 0.65rem;
+}
+
+.error-strip {
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  padding: 0.75rem 1.5rem;
+  color: var(--danger);
+  font-size: 0.82rem;
 }
 
 .chips {
