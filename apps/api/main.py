@@ -1,13 +1,15 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from sqlmodel import Session
 
 from apps.api import deps
 from apps.api.auth import create_access_token
 from apps.api.db import get_engine, get_session
 from apps.api.deps import get_current_user
-from apps.api.init_db import init_db
+from apps.api.init_db import init_db, seed_pack_catalog
 from apps.api.routes_admin import router as admin_router
 from apps.api.routes_sessions import router as sessions_router
 from apps.api.schemas import (
@@ -19,12 +21,13 @@ from apps.api.schemas import (
 )
 from apps.api.settings import settings
 from apps.engine.ask import AskRequest
-from sqlmodel import Session
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    init_db(get_engine())
+    engine = get_engine()
+    init_db(engine)
+    seed_pack_catalog(engine, Path(settings.packs_root))
     yield
 
 

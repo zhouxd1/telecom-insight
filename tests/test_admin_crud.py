@@ -11,6 +11,7 @@ from apps.api.settings import settings
 def client(tmp_path, monkeypatch):
     db_path = tmp_path / "admin.db"
     monkeypatch.setattr(settings, "database_url", f"sqlite:///{db_path}")
+    monkeypatch.setattr(settings, "packs_root", str(tmp_path / "empty_packs"))
     db.reset_engine()
     init_db(db.get_engine())
     with TestClient(app) as c:

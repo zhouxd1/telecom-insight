@@ -28,6 +28,7 @@ class FakeAskEngine:
 def client(tmp_path, monkeypatch):
     db_path = tmp_path / "sessions.db"
     monkeypatch.setattr(settings, "database_url", f"sqlite:///{db_path}")
+    monkeypatch.setattr(settings, "packs_root", str(tmp_path / "empty_packs"))
     db.reset_engine()
     init_db(db.get_engine())
     monkeypatch.setattr("apps.api.deps.get_ask_engine", lambda _session=None: FakeAskEngine())
