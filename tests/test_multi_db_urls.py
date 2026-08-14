@@ -1,7 +1,30 @@
 from apps.api.db_types import PROTOCOL_FAMILY, build_sqlalchemy_url, is_p0, is_p1
 
+# Every Phase 1b P0 db_type (spec §3.1) must appear here and in URL coverage below.
+P0_KEYS = (
+    "postgres",
+    "mysql",
+    "sqlserver",
+    "hive",
+    "opengauss",
+    "gaussdb",
+    "oceanbase_mysql",
+    "tidb",
+    "kingbase",
+    "dameng",
+)
+
+_EXPECTED_SCHEME_PREFIX = {
+    "postgres": "postgresql+psycopg://",
+    "mysql": "mysql+pymysql://",
+    "mssql": "mssql+pyodbc://",
+    "hive": "hive://",
+    "dm": "dm+dmPython://",
+}
+
 
 def test_p0_families():
+    assert set(PROTOCOL_FAMILY) == set(P0_KEYS)
     assert PROTOCOL_FAMILY["hive"] == "hive"
     assert PROTOCOL_FAMILY["kingbase"] == "postgres"
     assert PROTOCOL_FAMILY["dameng"] == "dm"
@@ -12,10 +35,28 @@ def test_p0_families():
     assert PROTOCOL_FAMILY["gaussdb"] == "postgres"
     assert PROTOCOL_FAMILY["oceanbase_mysql"] == "mysql"
     assert PROTOCOL_FAMILY["tidb"] == "mysql"
+    for key in P0_KEYS:
+        assert is_p0(key)
     assert is_p0("oceanbase_mysql") and is_p1("gbase")
     assert is_p1("shentong") and is_p1("polardb") and is_p1("tdsql")
     assert not is_p0("gbase")
     assert not is_p1("postgres")
+
+
+def test_build_url_for_every_p0_key():
+    """Unit URL coverage for all P0 db_types."""
+    for db_type in P0_KEYS:
+        family = PROTOCOL_FAMILY[db_type]
+        url = build_sqlalchemy_url(
+            db_type=db_type,
+            host="h",
+            port=1234,
+            database="d",
+            username="u",
+            password="p",
+        )
+        assert url.startswith(_EXPECTED_SCHEME_PREFIX[family]), db_type
+        assert "@h:1234/" in url, db_type
 
 
 def test_build_mysql_url():

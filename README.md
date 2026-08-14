@@ -17,6 +17,16 @@
 - **管理页**：`/app/models`、`/app/terms`、`/app/examples` — AI 模型、业务术语、SQL 示例 CRUD
 - **演示登录**：`demo` / `demo123`
 
+## Phase 1b
+
+- **组织 / 工作空间 / 成员**：租户边界；种子组织「演示运营商」+ 默认工作空间
+- **角色**：`org_admin` / `analyst` / `viewer`；域权限 `biz` / `network` / `cs`
+- **请求头**：需空间上下文的 API 携带 `Authorization` + **`X-Workspace-Id`**
+- **数据源**：可切换执行库；Ask 打到会话绑定源或空间默认源
+- **演示登录不变**：`demo` / `demo123`（`org_admin`，默认空间全开）
+- **多库 P0**：Postgres / MySQL / SQL Server / Hive / OpenGauss / GaussDB / OceanBase(MySQL) / TiDB / Kingbase / Dameng — 验证矩阵见 [phase1b-db-verification-matrix.md](docs/superpowers/plans/phase1b-db-verification-matrix.md)
+- **可选驱动**：Hive JDBC / Dameng `dmPython` 等非默认依赖；无驱动时 CI 仍跑 URL 单元测试，测连可跳过
+
 ## Clean-room note
 
 本项目为独立 clean-room 实现，**不是** SQLBot 的 fork、拷贝或衍生作品。架构与代码均为本仓库原创。
