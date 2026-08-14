@@ -1,15 +1,28 @@
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 
+from apps.api import db
+from apps.api.init_db import init_db
 from apps.api.main import app
+from apps.api.settings import settings
 from apps.engine.ask import AskEngine
 from apps.engine.llm import FakeLLM
 from apps.packs.models import Example, IndustryPack, Metric, Recommended, Term
 
-client = TestClient(app)
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    db_path = tmp_path / "ask_api.db"
+    monkeypatch.setattr(settings, "database_url", f"sqlite:///{db_path}")
+    db.reset_engine()
+    init_db(db.get_engine())
+    with TestClient(app) as c:
+        yield c
+    db.reset_engine()
 
 
-def test_login_and_list_domains():
+def test_login_and_list_domains(client: TestClient):
     r = client.post("/auth/login", json={"username": "demo", "password": "demo123"})
     assert r.status_code == 200
     token = r.json()["access_token"]
@@ -33,7 +46,7 @@ def _biz_pack() -> IndustryPack:
     )
 
 
-def test_ask_with_fake_engine(tmp_path, monkeypatch):
+def test_ask_with_fake_engine(client: TestClient, tmp_path, monkeypatch):
     eng = create_engine(f"sqlite:///{tmp_path / 't.db'}")
     with eng.begin() as c:
         c.execute(text("CREATE TABLE users(month TEXT, arpu REAL)"))
@@ -42,7 +55,7 @@ def test_ask_with_fake_engine(tmp_path, monkeypatch):
     llm = FakeLLM(sql="SELECT month, arpu FROM users ORDER BY month", narrative="ARPU 呈上升趋势。")
     ask_engine = AskEngine(warehouse=eng, llm=llm, packs_by_domain={"biz": _biz_pack()})
 
-    monkeypatch.setattr("apps.api.deps.get_ask_engine", lambda: ask_engine)
+    monkeypatch.setattr("apps.api.deps.get_ask_engine", lambda _session=None: ask_engine)
 
     r = client.post("/auth/login", json={"username": "demo", "password": "demo123"})
     assert r.status_code == 200

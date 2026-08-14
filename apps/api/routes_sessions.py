@@ -156,8 +156,14 @@ def ask_in_session(
     session.add(user_msg)
     session.commit()
 
-    engine = deps.get_ask_engine()
-    resp = engine.ask(AskRequest(domain=chat.domain, question=body.question))
+    extra_terms = deps.load_domain_terms(session, chat.domain)
+    extra_examples = deps.load_domain_examples(session, chat.domain)
+    engine = deps.get_ask_engine(session)
+    resp = engine.ask(
+        AskRequest(domain=chat.domain, question=body.question),
+        extra_terms=extra_terms,
+        extra_examples=extra_examples,
+    )
     steps = build_steps(resp)
     card = AskApiResponse(
         status=resp.status,

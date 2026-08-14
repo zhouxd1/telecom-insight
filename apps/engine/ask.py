@@ -1,19 +1,23 @@
 from dataclasses import dataclass, field
 from typing import Any
+
 from sqlalchemy.engine import Engine
-from apps.packs.models import IndustryPack
-from apps.engine.schema_rag import retrieve_schema_context
-from apps.engine.sql_guard import guard_sql, SqlGuardError
-from apps.engine.executor import execute_select
+
+from apps.engine.audit import AuditRecord, InMemoryAuditLog
 from apps.engine.chart import build_chart_option
 from apps.engine.clarify import needs_clarification
-from apps.engine.audit import AuditRecord, InMemoryAuditLog
+from apps.engine.executor import execute_select
 from apps.engine.llm import LLMClient
+from apps.engine.schema_rag import retrieve_schema_context
+from apps.engine.sql_guard import SqlGuardError, guard_sql
+from apps.packs.models import Example, IndustryPack, Term
+
 
 @dataclass
 class AskRequest:
     domain: str
     question: str
+
 
 @dataclass
 class AskResponse:
@@ -24,6 +28,20 @@ class AskResponse:
     truncated: bool = False
     chart: dict[str, Any] = field(default_factory=dict)
     narrative: str = ""
+
+
+def merge_pack_context(
+    pack: IndustryPack,
+    extra_terms: list[Term] | None = None,
+    extra_examples: list[Example] | None = None,
+) -> tuple[str, list[tuple[str, str]]]:
+    """Merge pack terminology/examples with optional DB extras for LLM context."""
+    terms = list(pack.terminology) + list(extra_terms or [])
+    examples = list(pack.examples) + list(extra_examples or [])
+    terminology_str = "\n".join(f"{t.term}=>{t.standard}" for t in terms)
+    examples_list = [(e.question, e.sql) for e in examples]
+    return terminology_str, examples_list
+
 
 class AskEngine:
     def __init__(
@@ -41,18 +59,27 @@ class AskEngine:
         self.audit = audit or InMemoryAuditLog()
         self.max_rows = max_rows
 
-    def ask(self, req: AskRequest) -> AskResponse:
+    def ask(
+        self,
+        req: AskRequest,
+        *,
+        extra_terms: list[Term] | None = None,
+        extra_examples: list[Example] | None = None,
+    ) -> AskResponse:
         pack = self.packs.get(req.domain)
         if not pack:
             return AskResponse(status="error", message=f"未知业务域: {req.domain}")
-        clarify = needs_clarification(req.question, [m.label for m in pack.metrics] + [t.term for t in pack.terminology])
+
+        clarify_labels = [m.label for m in pack.metrics] + [
+            t.term for t in pack.terminology
+        ] + [t.term for t in (extra_terms or [])]
+        clarify = needs_clarification(req.question, clarify_labels)
         if clarify:
             self.audit.write(AuditRecord(req.domain, req.question, None, False, clarify))
             return AskResponse(status="clarify", message=clarify)
 
         schema_ctx = retrieve_schema_context(pack, req.question)
-        terminology = "\n".join(f"{t.term}=>{t.standard}" for t in pack.terminology)
-        examples = [(e.question, e.sql) for e in pack.examples]
+        terminology, examples = merge_pack_context(pack, extra_terms, extra_examples)
         try:
             sql = self.llm.generate_sql(
                 question=req.question,

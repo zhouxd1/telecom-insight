@@ -11,7 +11,7 @@ from apps.engine.ask import AskRequest, AskResponse
 
 
 class FakeAskEngine:
-    def ask(self, req: AskRequest) -> AskResponse:
+    def ask(self, req: AskRequest, **_kwargs) -> AskResponse:
         assert req.domain == "biz"
         return AskResponse(
             status="ok",
@@ -30,7 +30,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "database_url", f"sqlite:///{db_path}")
     db.reset_engine()
     init_db(db.get_engine())
-    monkeypatch.setattr("apps.api.deps.get_ask_engine", lambda: FakeAskEngine())
+    monkeypatch.setattr("apps.api.deps.get_ask_engine", lambda _session=None: FakeAskEngine())
     with TestClient(app) as c:
         yield c
     db.reset_engine()

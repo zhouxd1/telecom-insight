@@ -4,13 +4,15 @@ from pathlib import Path
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import create_engine
+from sqlmodel import Session, select
 
 from apps.api.auth import decode_token
+from apps.api.models_db import TiAiModel, TiSqlExample, TiTerm
 from apps.api.settings import settings
 from apps.engine.ask import AskEngine
 from apps.engine.llm import OpenAICompatibleLLM
 from apps.packs.loader import load_pack
-from apps.packs.models import IndustryPack
+from apps.packs.models import Example, IndustryPack, Term
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -83,18 +85,45 @@ def _load_packs(packs_root: Path) -> dict[str, IndustryPack]:
 
 
 @lru_cache
-def get_ask_engine() -> AskEngine:
-    packs_root = Path(settings.packs_root)
-    packs = _load_packs(packs_root)
-    warehouse = create_engine(settings.database_url)
+def get_packs() -> dict[str, IndustryPack]:
+    return _load_packs(Path(settings.packs_root))
+
+
+def load_domain_terms(session: Session, domain: str) -> list[Term]:
+    rows = session.exec(select(TiTerm).where(TiTerm.domain == domain)).all()
+    return [
+        Term(term=r.term, standard=r.standard, maps_to=r.maps_to) for r in rows
+    ]
+
+
+def load_domain_examples(session: Session, domain: str) -> list[Example]:
+    rows = session.exec(select(TiSqlExample).where(TiSqlExample.domain == domain)).all()
+    return [Example(question=r.question, sql=r.sql) for r in rows]
+
+
+def resolve_llm(session: Session | None, packs: dict[str, IndustryPack]):
+    """Prefer enabled TiAiModel with api_key; else DemoFakeLLM (or settings key)."""
+    if session is not None:
+        model = session.exec(select(TiAiModel).where(TiAiModel.enabled.is_(True))).first()
+        if model is not None and model.api_key:
+            return OpenAICompatibleLLM(
+                model=model.model or settings.llm_model,
+                api_key=model.api_key,
+                base_url=model.base_url or None,
+            )
     if settings.llm_api_key:
-        llm: object = OpenAICompatibleLLM(
+        return OpenAICompatibleLLM(
             model=settings.llm_model,
             api_key=settings.llm_api_key,
             base_url=settings.llm_base_url,
         )
-    else:
-        llm = DemoFakeLLM(packs)
+    return DemoFakeLLM(packs)
+
+
+def get_ask_engine(session: Session | None = None) -> AskEngine:
+    packs = get_packs()
+    warehouse = create_engine(settings.database_url)
+    llm = resolve_llm(session, packs)
     return AskEngine(warehouse=warehouse, llm=llm, packs_by_domain=packs)
 
 

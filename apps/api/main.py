@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from apps.api import deps
 from apps.api.auth import create_access_token
-from apps.api.db import get_engine
+from apps.api.db import get_engine, get_session
 from apps.api.deps import get_current_user
 from apps.api.init_db import init_db
 from apps.api.routes_admin import router as admin_router
@@ -19,6 +19,7 @@ from apps.api.schemas import (
 )
 from apps.api.settings import settings
 from apps.engine.ask import AskRequest
+from sqlmodel import Session
 
 
 @asynccontextmanager
@@ -74,9 +75,19 @@ def list_recommended(domain_id: str, _user: str = Depends(get_current_user)):
 
 
 @app.post("/ask", response_model=AskApiResponse)
-def ask(body: AskBody, _user: str = Depends(get_current_user)):
-    engine = deps.get_ask_engine()
-    resp = engine.ask(AskRequest(domain=body.domain, question=body.question))
+def ask(
+    body: AskBody,
+    session: Session = Depends(get_session),
+    _user: str = Depends(get_current_user),
+):
+    extra_terms = deps.load_domain_terms(session, body.domain)
+    extra_examples = deps.load_domain_examples(session, body.domain)
+    engine = deps.get_ask_engine(session)
+    resp = engine.ask(
+        AskRequest(domain=body.domain, question=body.question),
+        extra_terms=extra_terms,
+        extra_examples=extra_examples,
+    )
     return AskApiResponse(
         status=resp.status,
         message=resp.message,
