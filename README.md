@@ -1,13 +1,21 @@
 # 元景.智数
 
-运营商智能问数 P0：自然语言提问 → 受控 SQL → 表格 / 图表 / 叙述，覆盖经营、网络、客服三个业务域。
+运营商智能问数：自然语言提问 → 受控 SQL → 表格 / 图表 / 叙述，覆盖经营、网络、客服三个业务域。
 
 ## What it is
 
 - **产品名**：元景.智数  
 - **仓库名**：telecom-insight  
-- FastAPI 问数 API + Industry Packs（YAML）+ SQL Guard（只读 / 表白名单）+ Vue 3 门户  
-- 演示数据落在 PostgreSQL schema：`biz` / `network` / `cs`
+- FastAPI 问数 API + Industry Packs（YAML）+ SQL Guard（只读 / 表白名单）+ Vue 3 ChatBI 门户  
+- 演示数据落在 PostgreSQL schema：`biz` / `network` / `cs`  
+- 应用表（会话、模型、术语、示例）使用 `ti_*` 前缀
+
+## Phase 1a
+
+- **ChatBI shell**：登录后进入 `/app` AppShell（侧栏导航 + 工作区）
+- **多会话问数**：创建 / 切换会话，`POST /sessions/{id}/ask` 持久化用户与助手消息（含 SQL / 图表 / 叙述 / steps）
+- **管理页**：`/app/models`、`/app/terms`、`/app/examples` — AI 模型、业务术语、SQL 示例 CRUD
+- **演示登录**：`demo` / `demo123`
 
 ## Clean-room note
 
@@ -41,7 +49,7 @@ python scripts/seed_all.py
 | `network` | 网络运维 |
 | `cs` | 客户服务 |
 
-每个域推荐问 ≥ 8 条；门户可切换域并一键提问。
+每个域推荐问 ≥ 8 条；ChatBI 工作区可切换域并一键提问。
 
 ## Environment variables
 
@@ -74,11 +82,13 @@ Against a running API (default `http://localhost:8000`):
 
 ```bash
 python scripts/acceptance_check.py
-# optional: also POST /ask for first recommended question per domain
+# optional: also POST /sessions/{id}/ask with a recommended question
 TI_RUN_ASK=1 python scripts/acceptance_check.py
+# no server: in-process FastAPI TestClient
+TI_USE_TESTCLIENT=1 python scripts/acceptance_check.py
 ```
 
-Checks: `/health`, login, `/domains`, and recommended count ≥ 8 for `biz` / `network` / `cs`. Exits non-zero on failure. If the API is not up, the script fails by design — start compose first.
+Checks: `/health`, login, `/domains`, recommended count ≥ 8 for `biz` / `network` / `cs`, create session, authenticated list of `/admin/models` / `/admin/terms` / `/admin/examples`, and (when `TI_RUN_ASK=1`) session ask. Exits non-zero on failure. If the API is not up, the script fails by design — start compose first (or use `TI_USE_TESTCLIENT=1`).
 
 ## License
 

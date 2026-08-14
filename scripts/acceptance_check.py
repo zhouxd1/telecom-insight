@@ -105,6 +105,7 @@ def main() -> int:
             _fail(f"/domains missing {sorted(missing)}")
         _ok(f"/domains {sorted(ids)}")
 
+        first_question: str | None = None
         for domain in DOMAINS:
             r = client.get(f"/domains/{domain}/recommended", headers=headers)
             if r.status_code != 200:
@@ -115,27 +116,52 @@ def main() -> int:
                     f"recommended/{domain} expected >= {MIN_RECOMMENDED}, got {len(items) if isinstance(items, list) else type(items)}"
                 )
             _ok(f"recommended/{domain} count={len(items)}")
+            if first_question is None and items:
+                text = items[0].get("text")
+                if text:
+                    first_question = text
 
-            if _run_ask():
-                text = items[0].get("text") if items else None
-                if not text:
-                    _fail(f"ask/{domain}: empty recommended text")
-                r = client.post(
-                    "/ask",
-                    headers=headers,
-                    json={"domain": domain, "question": text},
-                )
-                if r.status_code != 200:
-                    _fail(f"ask/{domain} HTTP {r.status_code}: {r.text}")
-                ask_body = r.json()
-                status = ask_body.get("status")
-                if status not in {"ok", "clarify", "error"}:
-                    _fail(f"ask/{domain} unexpected status {status}")
-                if status == "ok":
-                    for key in ("rows", "chart", "narrative"):
-                        if key not in ask_body:
-                            _fail(f"ask/{domain} missing key {key}")
-                _ok(f"ask/{domain} status={status}")
+        r = client.post(
+            "/sessions",
+            headers=headers,
+            json={"domain": "biz", "title": "acceptance"},
+        )
+        if r.status_code != 200:
+            _fail(f"create session status {r.status_code}: {r.text}")
+        session = r.json()
+        sid = session.get("id")
+        if sid is None:
+            _fail(f"create session missing id: {session}")
+        _ok(f"create session id={sid}")
+
+        if _run_ask():
+            if not first_question:
+                _fail("session ask: no recommended question text")
+            r = client.post(
+                f"/sessions/{sid}/ask",
+                headers=headers,
+                json={"question": first_question},
+            )
+            if r.status_code != 200:
+                _fail(f"session ask HTTP {r.status_code}: {r.text}")
+            ask_body = r.json()
+            status = ask_body.get("status")
+            if status not in {"ok", "clarify", "error"}:
+                _fail(f"session ask unexpected status {status}")
+            if status == "ok":
+                for key in ("rows", "chart", "narrative", "steps"):
+                    if key not in ask_body:
+                        _fail(f"session ask missing key {key}")
+            _ok(f"session ask status={status}")
+
+        for path in ("/admin/models", "/admin/terms", "/admin/examples"):
+            r = client.get(path, headers=headers)
+            if r.status_code != 200:
+                _fail(f"{path} status {r.status_code}: {r.text}")
+            data = r.json()
+            if not isinstance(data, list):
+                _fail(f"{path} expected list, got {type(data)}")
+            _ok(f"{path} count={len(data)}")
 
         print("ALL CHECKS PASSED")
         return 0
