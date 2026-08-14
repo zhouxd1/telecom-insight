@@ -78,6 +78,14 @@ def _reject_p1_default(db_type: str) -> None:
         )
 
 
+def _require_ds_manage(access: EffectiveAccess) -> None:
+    if not (access.role == "org_admin" or access.can_manage_workspace):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="org_admin required to manage datasources",
+        )
+
+
 def _validate_db_type(db_type: str) -> None:
     if not (is_p0(db_type) or is_p1(db_type) or db_type == "sqlite"):
         raise HTTPException(
@@ -106,7 +114,8 @@ def create_datasource(
     session: Session = Depends(get_session),
     ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    workspace, _access = ws_access
+    workspace, access = ws_access
+    _require_ds_manage(access)
     _validate_db_type(body.db_type)
     if body.is_default:
         _reject_p1_default(body.db_type)
@@ -151,7 +160,8 @@ def update_datasource(
     session: Session = Depends(get_session),
     ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    workspace, _access = ws_access
+    workspace, access = ws_access
+    _require_ds_manage(access)
     row = _get_workspace_ds(session, ds_id, workspace)
     data = body.model_dump(exclude_unset=True)
     password = data.pop("password", None)
@@ -160,8 +170,10 @@ def update_datasource(
         _validate_db_type(data["db_type"])
 
     next_db_type = data.get("db_type", row.db_type)
-    if data.get("is_default") is True:
+    next_is_default = data["is_default"] if "is_default" in data else row.is_default
+    if next_is_default:
         _reject_p1_default(next_db_type)
+    if data.get("is_default") is True:
         _unset_other_defaults(session, workspace.id, keep_id=ds_id)  # type: ignore[arg-type]
 
     for key, value in data.items():
@@ -182,7 +194,8 @@ def delete_datasource(
     session: Session = Depends(get_session),
     ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    workspace, _access = ws_access
+    workspace, access = ws_access
+    _require_ds_manage(access)
     row = _get_workspace_ds(session, ds_id, workspace)
     session.delete(row)
     session.commit()
@@ -214,7 +227,8 @@ def set_default_datasource(
     session: Session = Depends(get_session),
     ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    workspace, _access = ws_access
+    workspace, access = ws_access
+    _require_ds_manage(access)
     row = _get_workspace_ds(session, ds_id, workspace)
     _reject_p1_default(row.db_type)
     _unset_other_defaults(session, workspace.id, keep_id=ds_id)  # type: ignore[arg-type]
