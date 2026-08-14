@@ -158,19 +158,20 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 1rem;
   padding: 1.1rem 1.15rem;
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: var(--shadow);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
   min-height: 180px;
 }
 
 h2 {
   margin: 0 0 0.55rem;
-  font-size: 0.95rem;
+  font-size: 0.75rem;
   letter-spacing: 0.04em;
-  color: var(--teal);
-  text-transform: none;
+  color: var(--muted);
+  text-transform: uppercase;
+  font-weight: 600;
 }
 
 .narrative p {
@@ -178,37 +179,42 @@ h2 {
   line-height: 1.65;
   color: var(--ink);
   white-space: pre-wrap;
+  font-size: 0.9rem;
 }
 
 .chart {
   width: 100%;
   height: 280px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
 }
 
 .table-scroll {
   overflow: auto;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius);
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
+  font-size: 0.86rem;
 }
 
 th,
 td {
-  padding: 0.65rem 0.75rem;
+  padding: 0.55rem 0.7rem;
   border-bottom: 1px solid var(--line);
   text-align: left;
   white-space: nowrap;
 }
 
 th {
-  background: rgba(15, 118, 110, 0.08);
-  color: var(--ink-soft);
+  background: var(--surface-muted);
+  color: var(--muted);
   font-weight: 600;
+  font-size: 0.75rem;
 }
 
 tr:last-child td {
@@ -222,8 +228,9 @@ tr:last-child td {
 }
 
 .state {
-  color: var(--ink-soft);
+  color: var(--text);
   line-height: 1.5;
+  font-size: 0.9rem;
 }
 
 .state.error {

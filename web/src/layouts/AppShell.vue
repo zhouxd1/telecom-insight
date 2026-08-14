@@ -5,10 +5,10 @@
         <img src="/logo.svg" alt="元景.智数" class="logo" />
         <div class="brand-text">
           <strong>元景.智数</strong>
-          <span>电信域 ChatBI</span>
+          <span>运营商智能问数</span>
         </div>
       </div>
-      <button type="button" class="logout" @click="logout">退出登录</button>
+      <button type="button" class="logout" @click="logout">退出</button>
     </header>
 
     <div class="body">
@@ -21,7 +21,7 @@
           class="nav-item"
           active-class="active"
         >
-          <span class="nav-dot" aria-hidden="true" />
+          <span class="nav-bar" aria-hidden="true" />
           {{ item.label }}
         </RouterLink>
 
@@ -34,7 +34,7 @@
           disabled
           :title="`${item} · 即将推出`"
         >
-          <span class="nav-dot muted" aria-hidden="true" />
+          <span class="nav-bar muted" aria-hidden="true" />
           <span>{{ item }}</span>
           <em>即将推出</em>
         </button>
@@ -74,7 +74,8 @@ function logout() {
   z-index: 1;
   min-height: 100vh;
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: 56px 1fr;
+  background: var(--bg);
 }
 
 .topbar {
@@ -82,10 +83,9 @@ function logout() {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.7rem 1.25rem;
-  border-bottom: 1px solid rgba(232, 241, 240, 0.12);
-  background: linear-gradient(90deg, #07151d 0%, #0b1f2a 55%, #0d2a30 100%);
-  color: #e8f5f2;
+  padding: 0 1.5rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
 }
 
 .brand {
@@ -95,124 +95,135 @@ function logout() {
 }
 
 .logo {
-  width: 36px;
-  height: 36px;
-  filter: drop-shadow(0 4px 12px rgba(20, 184, 166, 0.35));
+  width: 28px;
+  height: 28px;
 }
 
 .brand-text {
   display: grid;
   line-height: 1.2;
+  gap: 0.1rem;
 }
 
 .brand-text strong {
-  font-size: 1.05rem;
-  letter-spacing: 0.04em;
-  font-weight: 700;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: 0.02em;
 }
 
 .brand-text span {
-  font-size: 0.75rem;
-  color: rgba(232, 245, 242, 0.62);
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-weight: 400;
 }
 
 .logout {
-  border: 1px solid rgba(232, 241, 240, 0.22);
-  background: rgba(255, 255, 255, 0.04);
-  color: #e8f5f2;
-  border-radius: 999px;
-  padding: 0.4rem 0.95rem;
-  font-size: 0.85rem;
-  transition: background 140ms ease, border-color 140ms ease;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  transition: background 120ms ease, border-color 120ms ease;
 }
 
 .logout:hover {
-  background: rgba(20, 184, 166, 0.16);
-  border-color: rgba(20, 184, 166, 0.45);
+  background: var(--surface-muted);
+  border-color: var(--line-strong);
 }
 
 .body {
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: 200px 1fr;
   min-height: 0;
 }
 
 .sidenav {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  padding: 1rem 0.75rem;
-  background: rgba(7, 21, 29, 0.92);
-  border-right: 1px solid rgba(232, 241, 240, 0.08);
-  color: #d7e8e4;
+  gap: 0.15rem;
+  padding: 1.25rem 0.75rem;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
 }
 
 .nav-group {
-  margin: 0.65rem 0.65rem 0.35rem;
-  font-size: 0.7rem;
-  letter-spacing: 0.08em;
+  margin: 0.85rem 0.65rem 0.4rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgba(215, 232, 228, 0.45);
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.nav-group:first-child {
+  margin-top: 0;
 }
 
 .nav-item {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 0.55rem;
-  padding: 0.62rem 0.7rem;
-  border-radius: 10px;
+  gap: 0.65rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius);
   text-decoration: none;
-  color: rgba(232, 245, 242, 0.82);
+  color: var(--text);
   border: 0;
   background: transparent;
   text-align: left;
-  font-size: 0.92rem;
-  transition: background 140ms ease, color 140ms ease;
+  font-size: 0.88rem;
+  font-weight: 500;
+  transition: background 120ms ease, color 120ms ease;
 }
 
 .nav-item:hover:not(.disabled) {
-  background: rgba(20, 184, 166, 0.12);
-  color: #fff;
+  background: var(--surface-muted);
 }
 
 .nav-item.active {
-  background: linear-gradient(135deg, rgba(15, 118, 110, 0.55), rgba(20, 184, 166, 0.28));
-  color: #fff;
-  box-shadow: inset 0 0 0 1px rgba(20, 184, 166, 0.35);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
 }
 
 .nav-item.disabled {
-  opacity: 0.48;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
 .nav-item em {
   margin-left: auto;
   font-style: normal;
-  font-size: 0.68rem;
-  color: rgba(232, 245, 242, 0.5);
-  border: 1px solid rgba(232, 245, 242, 0.18);
-  border-radius: 999px;
-  padding: 0.1rem 0.4rem;
+  font-size: 0.65rem;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.08rem 0.35rem;
+  font-weight: 500;
 }
 
-.nav-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--teal-bright);
-  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.18);
+.nav-bar {
+  width: 3px;
+  height: 14px;
+  border-radius: 1px;
+  background: transparent;
+  flex-shrink: 0;
 }
 
-.nav-dot.muted {
-  background: rgba(232, 245, 242, 0.35);
-  box-shadow: none;
+.nav-item.active .nav-bar {
+  background: var(--accent);
+}
+
+.nav-bar.muted {
+  background: var(--line-strong);
 }
 
 .content {
   min-width: 0;
   min-height: 0;
-  background: linear-gradient(180deg, #f3f8f7 0%, #e9f1f0 100%);
+  background: var(--bg);
 }
 
 @media (max-width: 900px) {
@@ -225,12 +236,12 @@ function logout() {
     flex-wrap: wrap;
     align-items: center;
     gap: 0.35rem;
-    padding: 0.65rem;
+    padding: 0.75rem;
   }
 
   .nav-group {
     width: 100%;
-    margin: 0.2rem 0.4rem;
+    margin: 0.25rem 0.4rem;
   }
 }
 </style>

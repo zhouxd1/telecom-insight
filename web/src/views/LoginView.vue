@@ -1,16 +1,12 @@
 <template>
   <main class="login-page">
-    <div class="login-atmosphere" aria-hidden="true">
-      <div class="orb orb-a" />
-      <div class="orb orb-b" />
-      <div class="grid-fade" />
-    </div>
-
-    <section class="login-stage">
+    <section class="login-card">
       <div class="hero-brand">
-        <img src="/logo.svg" alt="元景.智数" class="hero-logo" />
+        <div class="logo-block">
+          <img src="/logo.svg" alt="元景.智数" class="hero-logo" />
+        </div>
         <h1>元景.智数</h1>
-        <p>电信域数据问答与经营洞察</p>
+        <p>运营商智能问数</p>
       </div>
 
       <form class="login-form" @submit.prevent="onSubmit">
@@ -35,7 +31,7 @@
         </button>
       </form>
 
-      <p class="hint">演示账号：demo / demo123</p>
+      <p class="hint">演示账号 demo / demo123</p>
     </section>
   </main>
 </template>
@@ -72,171 +68,119 @@ async function onSubmit() {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 2rem 1.25rem;
-  overflow: hidden;
-  background: #061018;
+  padding: 2.5rem 1.25rem;
+  background: var(--bg);
 }
 
-.login-atmosphere {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(8px);
-}
-
-.orb-a {
-  width: 52vw;
-  height: 52vw;
-  left: -12vw;
-  top: -18vw;
-  background: radial-gradient(circle, rgba(20, 184, 166, 0.38), transparent 68%);
-  animation: drift 14s ease-in-out infinite alternate;
-}
-
-.orb-b {
-  width: 42vw;
-  height: 42vw;
-  right: -10vw;
-  bottom: -16vw;
-  background: radial-gradient(circle, rgba(11, 31, 42, 0.95), rgba(15, 118, 110, 0.28) 45%, transparent 70%);
-  animation: drift 18s ease-in-out infinite alternate-reverse;
-}
-
-.grid-fade {
-  position: absolute;
-  inset: 0;
-  opacity: 0.28;
-  background-image:
-    linear-gradient(rgba(232, 245, 242, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(232, 245, 242, 0.05) 1px, transparent 1px);
-  background-size: 56px 56px;
-  mask-image: radial-gradient(circle at 50% 40%, #000 20%, transparent 72%);
-}
-
-.login-stage {
-  position: relative;
-  width: min(440px, 100%);
-  padding: 2.4rem 2rem 1.7rem;
-  border-radius: 22px;
-  border: 1px solid rgba(232, 245, 242, 0.14);
-  background: rgba(244, 250, 249, 0.92);
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(14px);
-  animation: rise 480ms ease-out;
+.login-card {
+  width: min(400px, 100%);
+  padding: 2.5rem 2rem 2rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow);
 }
 
 .hero-brand {
   text-align: center;
-  margin-bottom: 1.7rem;
+  margin-bottom: 2rem;
+}
+
+.logo-block {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 1rem;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  border: 1px solid #ccfbf1;
 }
 
 .hero-logo {
-  width: 72px;
-  height: 72px;
-  margin-bottom: 0.85rem;
-  filter: drop-shadow(0 10px 24px rgba(15, 118, 110, 0.35));
+  width: 32px;
+  height: 32px;
 }
 
 .hero-brand h1 {
   margin: 0;
-  font-size: clamp(2rem, 4vw, 2.45rem);
-  letter-spacing: 0.06em;
+  font-size: 1.65rem;
+  letter-spacing: 0.04em;
   color: var(--ink);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .hero-brand p {
-  margin: 0.45rem 0 0;
+  margin: 0.4rem 0 0;
   color: var(--muted);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
+  font-weight: 400;
 }
 
 .login-form {
   display: grid;
-  gap: 0.9rem;
+  gap: 1rem;
 }
 
 label {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.4rem;
 }
 
 label span {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: var(--muted);
+  font-weight: 500;
 }
 
 input {
   width: 100%;
-  padding: 0.75rem 0.9rem;
+  padding: 0.7rem 0.85rem;
   border: 1px solid var(--line);
-  border-radius: 12px;
-  background: #fff;
+  border-radius: var(--radius);
+  background: var(--surface);
   color: var(--text);
   outline: none;
-  transition: border-color 160ms ease, box-shadow 160ms ease;
+  transition: border-color 120ms ease;
 }
 
 input:focus {
-  border-color: var(--teal);
-  box-shadow: 0 0 0 3px var(--teal-mist);
+  border-color: var(--accent);
 }
 
 button[type="submit"] {
   margin-top: 0.35rem;
-  border: 0;
-  border-radius: 12px;
-  padding: 0.82rem 1rem;
-  background: linear-gradient(135deg, var(--ink) 0%, var(--teal) 100%);
-  color: #f4fffc;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
   font-weight: 600;
-  transition: transform 140ms ease, opacity 140ms ease;
+  font-size: 0.9rem;
+  transition: background 120ms ease, opacity 120ms ease, border-color 120ms ease;
 }
 
 button[type="submit"]:hover:not(:disabled) {
-  transform: translateY(-1px);
+  background: #d5f5ef;
+  border-color: var(--accent-ink);
 }
 
 button[type="submit"]:disabled {
-  opacity: 0.7;
+  opacity: 0.55;
   cursor: wait;
 }
 
 .error {
   margin: 0;
   color: var(--danger);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .hint {
-  margin: 1rem 0 0;
+  margin: 1.25rem 0 0;
   text-align: center;
   color: var(--muted);
-  font-size: 0.82rem;
-}
-
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(14px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes drift {
-  from {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  to {
-    transform: translate3d(24px, -18px, 0) scale(1.06);
-  }
+  font-size: 0.78rem;
 }
 </style>

@@ -196,161 +196,183 @@ onBeforeUnmount(() => {
 <style scoped>
 .assistant-card {
   display: grid;
-  gap: 0.9rem;
-  padding: 1rem 1.05rem 1.1rem;
-  border-radius: 16px;
+  gap: 0.85rem;
+  padding: 1rem 1.05rem;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 10px 28px rgba(11, 31, 42, 0.08);
-  animation: card-in 320ms ease-out;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  max-width: min(760px, 100%);
 }
 
 .assistant-card.is-clarify {
-  border-color: rgba(180, 83, 9, 0.28);
+  border-color: #fde68a;
 }
 
 .assistant-card.is-error {
-  border-color: rgba(180, 83, 9, 0.4);
+  border-color: #fecaca;
 }
 
 .card-head {
   display: flex;
   align-items: center;
-  gap: 0.7rem;
+  gap: 0.65rem;
 }
 
 .avatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius);
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, var(--ink), var(--teal));
-  color: #f4fffc;
-  font-size: 0.85rem;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 0.75rem;
   font-weight: 700;
+  border: 1px solid #ccfbf1;
 }
 
 .meta {
   display: grid;
-  gap: 0.1rem;
+  gap: 0.05rem;
 }
 
 .meta strong {
-  font-size: 0.92rem;
+  font-size: 0.88rem;
+  font-weight: 600;
   color: var(--ink);
 }
 
 .meta span {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: var(--muted);
 }
 
 .steps {
   list-style: none;
   margin: 0;
-  padding: 0.55rem 0.65rem;
+  padding: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.45rem;
-  border-radius: 12px;
-  background: rgba(11, 31, 42, 0.04);
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface-muted);
 }
 
 .step {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.28rem 0.55rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid transparent;
+  padding: 0.4rem 0.65rem;
+  border-right: 1px solid var(--line);
+  background: transparent;
   opacity: 0;
-  animation: step-in 360ms ease-out forwards;
-  font-size: 0.78rem;
+  animation: step-in 280ms ease-out forwards;
+  font-size: 0.75rem;
   color: var(--muted);
+  font-weight: 500;
+}
+
+.step:last-child {
+  border-right: 0;
 }
 
 .step.done {
-  color: var(--ink-soft);
-  border-color: rgba(15, 118, 110, 0.25);
-  background: rgba(20, 184, 166, 0.1);
+  color: var(--accent-ink);
+  background: var(--surface);
 }
 
 .step.pending {
-  opacity: 0.55;
+  opacity: 0.5;
 }
 
 .step-mark {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #9db0ba;
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  background: var(--line-strong);
 }
 
 .step.done .step-mark {
-  background: var(--teal-bright);
-  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.18);
+  background: var(--accent);
 }
 
 .banner {
   margin: 0;
-  padding: 0.7rem 0.85rem;
-  border-radius: 10px;
-  font-size: 0.9rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--radius);
+  font-size: 0.86rem;
   line-height: 1.5;
+  border: 1px solid transparent;
 }
 
 .banner.clarify {
-  background: rgba(245, 158, 11, 0.12);
+  background: var(--warn-soft);
   color: #92400e;
+  border-color: #fde68a;
 }
 
 .banner.error {
-  background: rgba(180, 83, 9, 0.12);
-  color: #9a3412;
+  background: var(--danger-soft);
+  color: #b91c1c;
+  border-color: #fecaca;
 }
 
 .narrative h3,
 .chart-wrap h3,
 .section-title h3 {
-  margin: 0 0 0.45rem;
-  font-size: 0.82rem;
+  margin: 0 0 0.4rem;
+  font-size: 0.75rem;
   letter-spacing: 0.04em;
-  color: var(--teal);
+  text-transform: uppercase;
+  color: var(--muted);
   font-weight: 600;
 }
 
 .narrative p,
 .plain {
   margin: 0;
-  line-height: 1.65;
+  line-height: 1.6;
   color: var(--ink);
   white-space: pre-wrap;
+  font-size: 0.9rem;
 }
 
 .sql-block {
   border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #0b1f2a;
-  color: #d7ebe6;
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
   overflow: hidden;
 }
 
 .sql-block summary {
   cursor: pointer;
-  padding: 0.55rem 0.8rem;
-  font-size: 0.82rem;
-  color: rgba(215, 235, 230, 0.85);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--muted);
   user-select: none;
+  border-bottom: 1px solid transparent;
+}
+
+.sql-block[open] summary {
+  border-bottom-color: var(--line);
+  background: var(--surface-muted);
 }
 
 .sql-block pre {
   margin: 0;
-  padding: 0 0.85rem 0.85rem;
+  padding: 0.75rem;
   overflow: auto;
-  font-size: 0.8rem;
-  line-height: 1.5;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  background: var(--surface-muted);
+  color: var(--text);
+  border-top: 1px solid var(--line);
 }
 
 .section-title {
@@ -361,34 +383,35 @@ onBeforeUnmount(() => {
 }
 
 .section-title span {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: var(--muted);
 }
 
 .table-scroll {
   overflow: auto;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius);
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.86rem;
+  font-size: 0.84rem;
 }
 
 th,
 td {
-  padding: 0.55rem 0.7rem;
+  padding: 0.5rem 0.7rem;
   border-bottom: 1px solid var(--line);
   text-align: left;
   white-space: nowrap;
 }
 
 th {
-  background: rgba(15, 118, 110, 0.08);
-  color: var(--ink-soft);
+  background: var(--surface-muted);
+  color: var(--muted);
   font-weight: 600;
+  font-size: 0.75rem;
 }
 
 tr:last-child td {
@@ -397,28 +420,18 @@ tr:last-child td {
 
 .chart {
   width: 100%;
-  height: 260px;
-}
-
-@keyframes card-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  height: 240px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
 }
 
 @keyframes step-in {
   from {
     opacity: 0;
-    transform: translateY(4px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 </style>
