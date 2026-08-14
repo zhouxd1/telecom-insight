@@ -1,9 +1,14 @@
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from apps.api import deps
 from apps.api.auth import create_access_token
+from apps.api.db import get_engine
 from apps.api.deps import get_current_user
+from apps.api.init_db import init_db
+from apps.api.routes_admin import router as admin_router
 from apps.api.schemas import (
     AskApiResponse,
     AskBody,
@@ -14,7 +19,14 @@ from apps.api.schemas import (
 from apps.api.settings import settings
 from apps.engine.ask import AskRequest
 
-app = FastAPI(title="元景.智数", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    init_db(get_engine())
+    yield
+
+
+app = FastAPI(title="元景.智数", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -23,6 +35,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(admin_router)
 
 
 @app.get("/health")
