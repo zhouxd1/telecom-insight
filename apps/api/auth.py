@@ -2,10 +2,21 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from jose import JWTError, jwt
+from passlib.context import CryptContext
 
 from apps.api.settings import settings
 
 ALGORITHM = "HS256"
+
+_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def hash_password(password: str) -> str:
+    return _pwd_context.hash(password)
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return _pwd_context.verify(plain, hashed)
 
 
 def create_access_token(sub: str, org_id: int | None = None) -> str:

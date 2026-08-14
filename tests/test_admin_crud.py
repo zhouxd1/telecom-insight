@@ -5,6 +5,7 @@ from apps.api import db
 from apps.api.init_db import init_db, seed_tenant_bootstrap
 from apps.api.main import app
 from apps.api.settings import settings
+from tests.api_helpers import workspace_headers
 
 
 @pytest.fixture
@@ -21,14 +22,8 @@ def client(tmp_path, monkeypatch):
     db.reset_engine()
 
 
-def _auth_headers(client: TestClient) -> dict[str, str]:
-    r = client.post("/auth/login", json={"username": "demo", "password": "demo123"})
-    assert r.status_code == 200
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
-
-
 def test_models_crud_and_unique_enabled(client: TestClient):
-    headers = _auth_headers(client)
+    headers = workspace_headers(client)
 
     r = client.post(
         "/admin/models",
@@ -98,7 +93,7 @@ def test_models_crud_and_unique_enabled(client: TestClient):
 
 
 def test_terms_and_examples_crud_with_domain_filter(client: TestClient):
-    headers = _auth_headers(client)
+    headers = workspace_headers(client)
 
     t = client.post(
         "/admin/terms",

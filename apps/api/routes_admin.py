@@ -4,9 +4,10 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
+from apps.api.acl import EffectiveAccess
 from apps.api.db import get_session
-from apps.api.deps import get_current_user
-from apps.api.models_db import TiAiModel, TiSqlExample, TiTerm, TiUser
+from apps.api.deps import require_workspace
+from apps.api.models_db import TiAiModel, TiSqlExample, TiTerm, TiWorkspace
 from apps.api.schemas import (
     AiModelCreate,
     AiModelOut,
@@ -27,8 +28,12 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _disable_other_models(session: Session, keep_id: int | None = None) -> None:
-    models = session.exec(select(TiAiModel)).all()
+def _disable_other_models(
+    session: Session, workspace_id: int, keep_id: int | None = None
+) -> None:
+    models = session.exec(
+        select(TiAiModel).where(TiAiModel.workspace_id == workspace_id)
+    ).all()
     for m in models:
         if keep_id is not None and m.id == keep_id:
             continue
@@ -38,31 +43,65 @@ def _disable_other_models(session: Session, keep_id: int | None = None) -> None:
             session.add(m)
 
 
+def _get_workspace_model(
+    session: Session, model_id: int, workspace: TiWorkspace
+) -> TiAiModel:
+    row = session.get(TiAiModel, model_id)
+    if not row or row.workspace_id != workspace.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="model not found")
+    return row
+
+
+def _get_workspace_term(
+    session: Session, term_id: int, workspace: TiWorkspace
+) -> TiTerm:
+    row = session.get(TiTerm, term_id)
+    if not row or row.workspace_id != workspace.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="term not found")
+    return row
+
+
+def _get_workspace_example(
+    session: Session, example_id: int, workspace: TiWorkspace
+) -> TiSqlExample:
+    row = session.get(TiSqlExample, example_id)
+    if not row or row.workspace_id != workspace.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="example not found")
+    return row
+
+
 # --- Models ---
 
 
 @router.get("/models", response_model=list[AiModelOut])
 def list_models(
     session: Session = Depends(get_session),
-    _user: TiUser = Depends(get_current_user),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    return session.exec(select(TiAiModel).order_by(TiAiModel.id)).all()
+    workspace, _access = ws_access
+    return session.exec(
+        select(TiAiModel)
+        .where(TiAiModel.workspace_id == workspace.id)
+        .order_by(TiAiModel.id)
+    ).all()
 
 
 @router.post("/models", response_model=AiModelOut)
 def create_model(
     body: AiModelCreate,
     session: Session = Depends(get_session),
-    _user: TiUser = Depends(get_current_user),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
+    workspace, _access = ws_access
     if body.enabled:
-        _disable_other_models(session)
+        _disable_other_models(session, workspace.id)  # type: ignore[arg-type]
     row = TiAiModel(
         name=body.name,
         base_url=body.base_url,
         api_key=body.api_key,
         model=body.model,
         enabled=body.enabled,
+        workspace_id=workspace.id,
     )
     session.add(row)
     session.commit()
@@ -74,12 +113,10 @@ def create_model(
 def get_model(
     model_id: int,
     session: Session = Depends(get_session),
-    _user: TiUser = Depends(get_current_user),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    row = session.get(TiAiModel, model_id)
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="model not found")
-    return row
+    workspace, _access = ws_access
+    return _get_workspace_model(session, model_id, workspace)
 
 
 @router.patch("/models/{model_id}", response_model=AiModelOut)
@@ -87,14 +124,13 @@ def update_model(
     model_id: int,
     body: AiModelUpdate,
     session: Session = Depends(get_session),
-    _user: TiUser = Depends(get_current_user),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    row = session.get(TiAiModel, model_id)
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="model not found")
+    workspace, _access = ws_access
+    row = _get_workspace_model(session, model_id, workspace)
     data = body.model_dump(exclude_unset=True)
     if data.get("enabled") is True:
-        _disable_other_models(session, keep_id=model_id)
+        _disable_other_models(session, workspace.id, keep_id=model_id)  # type: ignore[arg-type]
     for key, value in data.items():
         setattr(row, key, value)
     row.updated_at = _utcnow()
@@ -108,11 +144,10 @@ def update_model(
 def delete_model(
     model_id: int,
     session: Session = Depends(get_session),
-    _user: TiUser = Depends(get_current_user),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    row = session.get(TiAiModel, model_id)
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="model not found")
+    workspace, _access = ws_access
+    row = _get_workspace_model(session, model_id, workspace)
     session.delete(row)
     session.commit()
     return {"ok": True}
@@ -122,11 +157,10 @@ def delete_model(
 def test_model(
     model_id: int,
     session: Session = Depends(get_session),
-    _user: TiUser = Depends(get_current_user),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    row = session.get(TiAiModel, model_id)
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="model not found")
+    workspace, _access = ws_access
+    row = _get_workspace_model(session, model_id, workspace)
     if not row.api_key:
         return ModelTestResult(ok=True, detail="skipped")
     base = (row.base_url or "").rstrip("/")
@@ -150,9 +184,14 @@ def test_model(
 def list_terms(
     domain: str | None = None,
     session: Session = Depends(get_session),
-    _user: TiUser = Depends(get_current_user),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    stmt = select(TiTerm).order_by(TiTerm.id)
+    workspace, _access = ws_access
+    stmt = (
+        select(TiTerm)
+        .where(TiTerm.workspace_id == workspace.id)
+        .order_by(TiTerm.id)
+    )
     if domain:
         stmt = stmt.where(TiTerm.domain == domain)
     return session.exec(stmt).all()
@@ -162,13 +201,15 @@ def list_terms(
 def create_term(
     body: TermCreate,
     session: Session = Depends(get_session),
-    _user: TiUser = Depends(get_current_user),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
+    workspace, _access = ws_access
     row = TiTerm(
         domain=body.domain,
         term=body.term,
         standard=body.standard,
         maps_to=body.maps_to,
+        workspace_id=workspace.id,
     )
     session.add(row)
     session.commit()
@@ -180,12 +221,10 @@ def create_term(
 def get_term(
     term_id: int,
     session: Session = Depends(get_session),
-    _user: TiUser = Depends(get_current_user),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    row = session.get(TiTerm, term_id)
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="term not found")
-    return row
+    workspace, _access = ws_access
+    return _get_workspace_term(session, term_id, workspace)
 
 
 @router.patch("/terms/{term_id}", response_model=TermOut)
@@ -193,11 +232,10 @@ def update_term(
     term_id: int,
     body: TermUpdate,
     session: Session = Depends(get_session),
-    _user: TiUser = Depends(get_current_user),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    row = session.get(TiTerm, term_id)
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="term not found")
+    workspace, _access = ws_access
+    row = _get_workspace_term(session, term_id, workspace)
     for key, value in body.model_dump(exclude_unset=True).items():
         setattr(row, key, value)
     row.updated_at = _utcnow()
@@ -211,11 +249,10 @@ def update_term(
 def delete_term(
     term_id: int,
     session: Session = Depends(get_session),
-    _user: TiUser = Depends(get_current_user),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    row = session.get(TiTerm, term_id)
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="term not found")
+    workspace, _access = ws_access
+    row = _get_workspace_term(session, term_id, workspace)
     session.delete(row)
     session.commit()
     return {"ok": True}
@@ -228,9 +265,14 @@ def delete_term(
 def list_examples(
     domain: str | None = None,
     session: Session = Depends(get_session),
-    _user: TiUser = Depends(get_current_user),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    stmt = select(TiSqlExample).order_by(TiSqlExample.id)
+    workspace, _access = ws_access
+    stmt = (
+        select(TiSqlExample)
+        .where(TiSqlExample.workspace_id == workspace.id)
+        .order_by(TiSqlExample.id)
+    )
     if domain:
         stmt = stmt.where(TiSqlExample.domain == domain)
     return session.exec(stmt).all()
@@ -240,9 +282,15 @@ def list_examples(
 def create_example(
     body: ExampleCreate,
     session: Session = Depends(get_session),
-    _user: TiUser = Depends(get_current_user),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    row = TiSqlExample(domain=body.domain, question=body.question, sql=body.sql)
+    workspace, _access = ws_access
+    row = TiSqlExample(
+        domain=body.domain,
+        question=body.question,
+        sql=body.sql,
+        workspace_id=workspace.id,
+    )
     session.add(row)
     session.commit()
     session.refresh(row)
@@ -253,12 +301,10 @@ def create_example(
 def get_example(
     example_id: int,
     session: Session = Depends(get_session),
-    _user: TiUser = Depends(get_current_user),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    row = session.get(TiSqlExample, example_id)
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="example not found")
-    return row
+    workspace, _access = ws_access
+    return _get_workspace_example(session, example_id, workspace)
 
 
 @router.patch("/examples/{example_id}", response_model=ExampleOut)
@@ -266,11 +312,10 @@ def update_example(
     example_id: int,
     body: ExampleUpdate,
     session: Session = Depends(get_session),
-    _user: TiUser = Depends(get_current_user),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    row = session.get(TiSqlExample, example_id)
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="example not found")
+    workspace, _access = ws_access
+    row = _get_workspace_example(session, example_id, workspace)
     for key, value in body.model_dump(exclude_unset=True).items():
         setattr(row, key, value)
     row.updated_at = _utcnow()
@@ -284,11 +329,10 @@ def update_example(
 def delete_example(
     example_id: int,
     session: Session = Depends(get_session),
-    _user: TiUser = Depends(get_current_user),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    row = session.get(TiSqlExample, example_id)
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="example not found")
+    workspace, _access = ws_access
+    row = _get_workspace_example(session, example_id, workspace)
     session.delete(row)
     session.commit()
     return {"ok": True}

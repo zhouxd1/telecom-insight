@@ -1,14 +1,22 @@
 from functools import lru_cache
 from pathlib import Path
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import create_engine
 from sqlmodel import Session, select
 
+from apps.api.acl import EffectiveAccess, resolve_access
 from apps.api.auth import decode_token
 from apps.api.db import get_session
-from apps.api.models_db import TiAiModel, TiSqlExample, TiTerm, TiUser
+from apps.api.models_db import (
+    TiAiModel,
+    TiSqlExample,
+    TiTerm,
+    TiUser,
+    TiWorkspace,
+    TiWorkspaceMember,
+)
 from apps.api.settings import settings
 from apps.engine.ask import AskEngine
 from apps.engine.llm import OpenAICompatibleLLM
@@ -85,6 +93,66 @@ def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="invalid credentials",
+        )
+    return user
+
+
+def get_workspace_access(
+    session: Session,
+    user: TiUser,
+    workspace_id: int,
+) -> tuple[TiWorkspace, EffectiveAccess]:
+    """Load workspace and resolve effective access for the user."""
+    workspace = session.get(TiWorkspace, workspace_id)
+    if workspace is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="workspace not found",
+        )
+
+    if user.org_role == "org_admin" and workspace.org_id == user.org_id:
+        access = resolve_access(
+            org_role=user.org_role,
+            member_role=None,
+            member_domains=None,
+            is_org_admin=True,
+        )
+        return workspace, access
+
+    member = session.exec(
+        select(TiWorkspaceMember).where(
+            TiWorkspaceMember.workspace_id == workspace_id,
+            TiWorkspaceMember.user_id == user.id,
+        )
+    ).first()
+    if member is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="not a workspace member",
+        )
+
+    access = resolve_access(
+        org_role=user.org_role,
+        member_role=member.role,
+        member_domains=list(member.domains or []),
+        is_org_admin=False,
+    )
+    return workspace, access
+
+
+def require_workspace(
+    x_workspace_id: int = Header(..., alias="X-Workspace-Id"),
+    user: TiUser = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> tuple[TiWorkspace, EffectiveAccess]:
+    return get_workspace_access(session, user, x_workspace_id)
+
+
+def require_org_admin(user: TiUser = Depends(get_current_user)) -> TiUser:
+    if user.org_role != "org_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="org_admin required",
         )
     return user
 

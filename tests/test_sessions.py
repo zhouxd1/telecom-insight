@@ -8,6 +8,7 @@ from apps.api.init_db import init_db, seed_tenant_bootstrap
 from apps.api.main import app
 from apps.api.settings import settings
 from apps.engine.ask import AskRequest, AskResponse
+from tests.api_helpers import workspace_headers
 
 
 class FakeAskEngine:
@@ -39,14 +40,8 @@ def client(tmp_path, monkeypatch):
     db.reset_engine()
 
 
-def _auth_headers(client: TestClient) -> dict[str, str]:
-    r = client.post("/auth/login", json={"username": "demo", "password": "demo123"})
-    assert r.status_code == 200
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
-
-
 def test_session_crud_and_ask_persists_messages(client: TestClient):
-    headers = _auth_headers(client)
+    headers = workspace_headers(client)
 
     created = client.post(
         "/sessions",

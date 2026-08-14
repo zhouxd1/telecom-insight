@@ -13,6 +13,8 @@ from apps.api.models_db import TiUser
 from apps.api.routes_admin import router as admin_router
 from apps.api.routes_auth import router as auth_router
 from apps.api.routes_sessions import router as sessions_router
+from apps.api.routes_users import router as users_router
+from apps.api.routes_workspaces import router as workspaces_router
 from apps.api.schemas import (
     AskApiResponse,
     AskBody,
@@ -42,6 +44,8 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(workspaces_router)
+app.include_router(users_router)
 app.include_router(admin_router)
 app.include_router(sessions_router)
 

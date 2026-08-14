@@ -31,6 +31,72 @@ class MeResponse(BaseModel):
     workspaces: list[WorkspaceSummary]
 
 
+# --- Workspaces ---
+
+
+class WorkspaceCreate(BaseModel):
+    name: str
+
+
+class WorkspaceUpdate(BaseModel):
+    name: Optional[str] = None
+    status: Optional[str] = None  # active | archived
+
+
+class WorkspaceOut(BaseModel):
+    id: int
+    org_id: int
+    name: str
+    status: str
+    created_at: datetime
+
+
+class MemberCreate(BaseModel):
+    user_id: int
+    role: str
+    domains: list[str] = Field(default_factory=list)
+
+
+class MemberUpdate(BaseModel):
+    role: Optional[str] = None
+    domains: Optional[list[str]] = None
+
+
+class MemberOut(BaseModel):
+    id: int
+    workspace_id: int
+    user_id: int
+    role: str
+    domains: list[str]
+
+
+# --- Admin users ---
+
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    display_name: str = ""
+    org_role: str = "viewer"
+    enabled: bool = True
+
+
+class UserUpdate(BaseModel):
+    display_name: Optional[str] = None
+    org_role: Optional[str] = None
+    enabled: Optional[bool] = None
+    password: Optional[str] = None
+
+
+class UserOut(BaseModel):
+    id: int
+    org_id: int
+    username: str
+    display_name: str
+    org_role: str
+    enabled: bool
+
+
 class DomainInfo(BaseModel):
     id: str
     name: str

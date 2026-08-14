@@ -1,17 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from passlib.context import CryptContext
 from sqlmodel import Session, select
 
 from apps.api.acl import ALL_DOMAINS
-from apps.api.auth import create_access_token
+from apps.api.auth import create_access_token, verify_password
 from apps.api.db import get_session
 from apps.api.deps import get_current_user
 from apps.api.models_db import TiOrg, TiUser, TiWorkspace, TiWorkspaceMember
 from apps.api.schemas import LoginRequest, MeResponse, TokenResponse, WorkspaceSummary
 
 router = APIRouter(tags=["auth"])
-
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 @router.post("/auth/login", response_model=TokenResponse)
@@ -20,7 +17,7 @@ def login(body: LoginRequest, session: Session = Depends(get_session)):
     if (
         user is None
         or not user.enabled
-        or not _pwd_context.verify(body.password, user.password_hash)
+        or not verify_password(body.password, user.password_hash)
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

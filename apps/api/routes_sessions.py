@@ -5,9 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
 from apps.api import deps
+from apps.api.acl import EffectiveAccess
 from apps.api.db import get_session
-from apps.api.deps import get_current_user
-from apps.api.models_db import TiChatMessage, TiChatSession, TiUser
+from apps.api.deps import require_workspace
+from apps.api.models_db import TiChatMessage, TiChatSession, TiWorkspace
 from apps.api.schemas import (
     AskApiResponse,
     MessageOut,
@@ -49,22 +50,44 @@ def build_steps(resp: AskResponse) -> list[StepInfo]:
     ]
 
 
+def _get_workspace_session(
+    session: Session,
+    session_id: int,
+    workspace: TiWorkspace,
+) -> TiChatSession:
+    row = session.get(TiChatSession, session_id)
+    if not row or row.workspace_id != workspace.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="session not found")
+    return row
+
+
 @router.get("", response_model=list[SessionOut])
 def list_sessions(
     session: Session = Depends(get_session),
-    _user: TiUser = Depends(get_current_user),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    return session.exec(select(TiChatSession).order_by(TiChatSession.id.desc())).all()
+    workspace, _access = ws_access
+    return session.exec(
+        select(TiChatSession)
+        .where(TiChatSession.workspace_id == workspace.id)
+        .order_by(TiChatSession.id.desc())
+    ).all()
 
 
 @router.post("", response_model=SessionOut)
 def create_session(
     body: SessionCreate,
     session: Session = Depends(get_session),
-    _user: TiUser = Depends(get_current_user),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
+    workspace, access = ws_access
+    if not access.can_ask:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="viewer cannot create sessions",
+        )
     title = body.title or "新会话"
-    row = TiChatSession(title=title, domain=body.domain)
+    row = TiChatSession(title=title, domain=body.domain, workspace_id=workspace.id)
     session.add(row)
     session.commit()
     session.refresh(row)
@@ -75,12 +98,10 @@ def create_session(
 def get_session_row(
     session_id: int,
     session: Session = Depends(get_session),
-    _user: TiUser = Depends(get_current_user),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    row = session.get(TiChatSession, session_id)
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="session not found")
-    return row
+    workspace, _access = ws_access
+    return _get_workspace_session(session, session_id, workspace)
 
 
 @router.patch("/{session_id}", response_model=SessionOut)
@@ -88,11 +109,10 @@ def update_session(
     session_id: int,
     body: SessionUpdate,
     session: Session = Depends(get_session),
-    _user: TiUser = Depends(get_current_user),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    row = session.get(TiChatSession, session_id)
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="session not found")
+    workspace, _access = ws_access
+    row = _get_workspace_session(session, session_id, workspace)
     for key, value in body.model_dump(exclude_unset=True).items():
         setattr(row, key, value)
     row.updated_at = _utcnow()
@@ -106,11 +126,10 @@ def update_session(
 def delete_session(
     session_id: int,
     session: Session = Depends(get_session),
-    _user: TiUser = Depends(get_current_user),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    row = session.get(TiChatSession, session_id)
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="session not found")
+    workspace, _access = ws_access
+    row = _get_workspace_session(session, session_id, workspace)
     messages = session.exec(
         select(TiChatMessage).where(TiChatMessage.session_id == session_id)
     ).all()
@@ -125,11 +144,10 @@ def delete_session(
 def list_messages(
     session_id: int,
     session: Session = Depends(get_session),
-    _user: TiUser = Depends(get_current_user),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    row = session.get(TiChatSession, session_id)
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="session not found")
+    workspace, _access = ws_access
+    _get_workspace_session(session, session_id, workspace)
     return session.exec(
         select(TiChatMessage)
         .where(TiChatMessage.session_id == session_id)
@@ -142,11 +160,15 @@ def ask_in_session(
     session_id: int,
     body: SessionAskBody,
     session: Session = Depends(get_session),
-    _user: TiUser = Depends(get_current_user),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    chat = session.get(TiChatSession, session_id)
-    if not chat:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="session not found")
+    workspace, access = ws_access
+    if not access.can_ask:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="viewer cannot ask",
+        )
+    chat = _get_workspace_session(session, session_id, workspace)
 
     user_msg = TiChatMessage(
         session_id=session_id,
