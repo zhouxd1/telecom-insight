@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from apps.api import db
-from apps.api.init_db import init_db
+from apps.api.init_db import init_db, seed_tenant_bootstrap
 from apps.api.main import app
 from apps.api.settings import settings
 from apps.engine.ask import AskRequest, AskResponse
@@ -30,7 +30,9 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "database_url", f"sqlite:///{db_path}")
     monkeypatch.setattr(settings, "packs_root", str(tmp_path / "empty_packs"))
     db.reset_engine()
-    init_db(db.get_engine())
+    engine = db.get_engine()
+    init_db(engine)
+    seed_tenant_bootstrap(engine, default_database_url="sqlite://")
     monkeypatch.setattr("apps.api.deps.get_ask_engine", lambda _session=None: FakeAskEngine())
     with TestClient(app) as c:
         yield c

@@ -14,6 +14,23 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class WorkspaceSummary(BaseModel):
+    id: int
+    name: str
+    role: str
+    domains: list[str]
+
+
+class MeResponse(BaseModel):
+    id: int
+    username: str
+    display_name: str
+    org_id: int
+    org_name: str
+    org_role: str
+    workspaces: list[WorkspaceSummary]
+
+
 class DomainInfo(BaseModel):
     id: str
     name: str

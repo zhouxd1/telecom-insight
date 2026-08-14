@@ -6,7 +6,7 @@ from sqlmodel import Session, select
 
 from apps.api.db import get_session
 from apps.api.deps import get_current_user
-from apps.api.models_db import TiAiModel, TiSqlExample, TiTerm
+from apps.api.models_db import TiAiModel, TiSqlExample, TiTerm, TiUser
 from apps.api.schemas import (
     AiModelCreate,
     AiModelOut,
@@ -44,7 +44,7 @@ def _disable_other_models(session: Session, keep_id: int | None = None) -> None:
 @router.get("/models", response_model=list[AiModelOut])
 def list_models(
     session: Session = Depends(get_session),
-    _user: str = Depends(get_current_user),
+    _user: TiUser = Depends(get_current_user),
 ):
     return session.exec(select(TiAiModel).order_by(TiAiModel.id)).all()
 
@@ -53,7 +53,7 @@ def list_models(
 def create_model(
     body: AiModelCreate,
     session: Session = Depends(get_session),
-    _user: str = Depends(get_current_user),
+    _user: TiUser = Depends(get_current_user),
 ):
     if body.enabled:
         _disable_other_models(session)
@@ -74,7 +74,7 @@ def create_model(
 def get_model(
     model_id: int,
     session: Session = Depends(get_session),
-    _user: str = Depends(get_current_user),
+    _user: TiUser = Depends(get_current_user),
 ):
     row = session.get(TiAiModel, model_id)
     if not row:
@@ -87,7 +87,7 @@ def update_model(
     model_id: int,
     body: AiModelUpdate,
     session: Session = Depends(get_session),
-    _user: str = Depends(get_current_user),
+    _user: TiUser = Depends(get_current_user),
 ):
     row = session.get(TiAiModel, model_id)
     if not row:
@@ -108,7 +108,7 @@ def update_model(
 def delete_model(
     model_id: int,
     session: Session = Depends(get_session),
-    _user: str = Depends(get_current_user),
+    _user: TiUser = Depends(get_current_user),
 ):
     row = session.get(TiAiModel, model_id)
     if not row:
@@ -122,7 +122,7 @@ def delete_model(
 def test_model(
     model_id: int,
     session: Session = Depends(get_session),
-    _user: str = Depends(get_current_user),
+    _user: TiUser = Depends(get_current_user),
 ):
     row = session.get(TiAiModel, model_id)
     if not row:
@@ -150,7 +150,7 @@ def test_model(
 def list_terms(
     domain: str | None = None,
     session: Session = Depends(get_session),
-    _user: str = Depends(get_current_user),
+    _user: TiUser = Depends(get_current_user),
 ):
     stmt = select(TiTerm).order_by(TiTerm.id)
     if domain:
@@ -162,7 +162,7 @@ def list_terms(
 def create_term(
     body: TermCreate,
     session: Session = Depends(get_session),
-    _user: str = Depends(get_current_user),
+    _user: TiUser = Depends(get_current_user),
 ):
     row = TiTerm(
         domain=body.domain,
@@ -180,7 +180,7 @@ def create_term(
 def get_term(
     term_id: int,
     session: Session = Depends(get_session),
-    _user: str = Depends(get_current_user),
+    _user: TiUser = Depends(get_current_user),
 ):
     row = session.get(TiTerm, term_id)
     if not row:
@@ -193,7 +193,7 @@ def update_term(
     term_id: int,
     body: TermUpdate,
     session: Session = Depends(get_session),
-    _user: str = Depends(get_current_user),
+    _user: TiUser = Depends(get_current_user),
 ):
     row = session.get(TiTerm, term_id)
     if not row:
@@ -211,7 +211,7 @@ def update_term(
 def delete_term(
     term_id: int,
     session: Session = Depends(get_session),
-    _user: str = Depends(get_current_user),
+    _user: TiUser = Depends(get_current_user),
 ):
     row = session.get(TiTerm, term_id)
     if not row:
@@ -228,7 +228,7 @@ def delete_term(
 def list_examples(
     domain: str | None = None,
     session: Session = Depends(get_session),
-    _user: str = Depends(get_current_user),
+    _user: TiUser = Depends(get_current_user),
 ):
     stmt = select(TiSqlExample).order_by(TiSqlExample.id)
     if domain:
@@ -240,7 +240,7 @@ def list_examples(
 def create_example(
     body: ExampleCreate,
     session: Session = Depends(get_session),
-    _user: str = Depends(get_current_user),
+    _user: TiUser = Depends(get_current_user),
 ):
     row = TiSqlExample(domain=body.domain, question=body.question, sql=body.sql)
     session.add(row)
@@ -253,7 +253,7 @@ def create_example(
 def get_example(
     example_id: int,
     session: Session = Depends(get_session),
-    _user: str = Depends(get_current_user),
+    _user: TiUser = Depends(get_current_user),
 ):
     row = session.get(TiSqlExample, example_id)
     if not row:
@@ -266,7 +266,7 @@ def update_example(
     example_id: int,
     body: ExampleUpdate,
     session: Session = Depends(get_session),
-    _user: str = Depends(get_current_user),
+    _user: TiUser = Depends(get_current_user),
 ):
     row = session.get(TiSqlExample, example_id)
     if not row:
@@ -284,7 +284,7 @@ def update_example(
 def delete_example(
     example_id: int,
     session: Session = Depends(get_session),
-    _user: str = Depends(get_current_user),
+    _user: TiUser = Depends(get_current_user),
 ):
     row = session.get(TiSqlExample, example_id)
     if not row:

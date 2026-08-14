@@ -7,7 +7,7 @@ from sqlmodel import Session, select
 from apps.api import deps
 from apps.api.db import get_session
 from apps.api.deps import get_current_user
-from apps.api.models_db import TiChatMessage, TiChatSession
+from apps.api.models_db import TiChatMessage, TiChatSession, TiUser
 from apps.api.schemas import (
     AskApiResponse,
     MessageOut,
@@ -52,7 +52,7 @@ def build_steps(resp: AskResponse) -> list[StepInfo]:
 @router.get("", response_model=list[SessionOut])
 def list_sessions(
     session: Session = Depends(get_session),
-    _user: str = Depends(get_current_user),
+    _user: TiUser = Depends(get_current_user),
 ):
     return session.exec(select(TiChatSession).order_by(TiChatSession.id.desc())).all()
 
@@ -61,7 +61,7 @@ def list_sessions(
 def create_session(
     body: SessionCreate,
     session: Session = Depends(get_session),
-    _user: str = Depends(get_current_user),
+    _user: TiUser = Depends(get_current_user),
 ):
     title = body.title or "新会话"
     row = TiChatSession(title=title, domain=body.domain)
@@ -75,7 +75,7 @@ def create_session(
 def get_session_row(
     session_id: int,
     session: Session = Depends(get_session),
-    _user: str = Depends(get_current_user),
+    _user: TiUser = Depends(get_current_user),
 ):
     row = session.get(TiChatSession, session_id)
     if not row:
@@ -88,7 +88,7 @@ def update_session(
     session_id: int,
     body: SessionUpdate,
     session: Session = Depends(get_session),
-    _user: str = Depends(get_current_user),
+    _user: TiUser = Depends(get_current_user),
 ):
     row = session.get(TiChatSession, session_id)
     if not row:
@@ -106,7 +106,7 @@ def update_session(
 def delete_session(
     session_id: int,
     session: Session = Depends(get_session),
-    _user: str = Depends(get_current_user),
+    _user: TiUser = Depends(get_current_user),
 ):
     row = session.get(TiChatSession, session_id)
     if not row:
@@ -125,7 +125,7 @@ def delete_session(
 def list_messages(
     session_id: int,
     session: Session = Depends(get_session),
-    _user: str = Depends(get_current_user),
+    _user: TiUser = Depends(get_current_user),
 ):
     row = session.get(TiChatSession, session_id)
     if not row:
@@ -142,7 +142,7 @@ def ask_in_session(
     session_id: int,
     body: SessionAskBody,
     session: Session = Depends(get_session),
-    _user: str = Depends(get_current_user),
+    _user: TiUser = Depends(get_current_user),
 ):
     chat = session.get(TiChatSession, session_id)
     if not chat:

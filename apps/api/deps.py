@@ -7,7 +7,8 @@ from sqlalchemy import create_engine
 from sqlmodel import Session, select
 
 from apps.api.auth import decode_token
-from apps.api.models_db import TiAiModel, TiSqlExample, TiTerm
+from apps.api.db import get_session
+from apps.api.models_db import TiAiModel, TiSqlExample, TiTerm, TiUser
 from apps.api.settings import settings
 from apps.engine.ask import AskEngine
 from apps.engine.llm import OpenAICompatibleLLM
@@ -64,13 +65,28 @@ class DemoFakeLLM:
 
 def get_current_user(
     creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
-) -> str:
+    session: Session = Depends(get_session),
+) -> TiUser:
     if creds is None or creds.scheme.lower() != "bearer" or not creds.credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="missing bearer token",
         )
-    return decode_token(creds.credentials)
+    sub = decode_token(creds.credentials)
+    try:
+        user_id = int(sub)
+    except (TypeError, ValueError) as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid token",
+        ) from e
+    user = session.get(TiUser, user_id)
+    if user is None or not user.enabled:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid credentials",
+        )
+    return user
 
 
 def _load_packs(packs_root: Path) -> dict[str, IndustryPack]:

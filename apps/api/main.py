@@ -6,18 +6,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import Session
 
 from apps.api import deps
-from apps.api.auth import create_access_token
 from apps.api.db import get_engine, get_session
 from apps.api.deps import get_current_user
-from apps.api.init_db import init_db, seed_pack_catalog
+from apps.api.init_db import init_db, seed_pack_catalog, seed_tenant_bootstrap
+from apps.api.models_db import TiUser
 from apps.api.routes_admin import router as admin_router
+from apps.api.routes_auth import router as auth_router
 from apps.api.routes_sessions import router as sessions_router
 from apps.api.schemas import (
     AskApiResponse,
     AskBody,
     DomainInfo,
-    LoginRequest,
-    TokenResponse,
 )
 from apps.api.settings import settings
 from apps.engine.ask import AskRequest
@@ -27,6 +26,7 @@ from apps.engine.ask import AskRequest
 async def lifespan(_app: FastAPI):
     engine = get_engine()
     init_db(engine)
+    seed_tenant_bootstrap(engine, default_database_url=settings.database_url)
     seed_pack_catalog(engine, Path(settings.packs_root))
     yield
 
@@ -41,6 +41,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(sessions_router)
 
@@ -50,18 +51,8 @@ def health():
     return {"status": "ok", "service": "telecom-insight"}
 
 
-@app.post("/auth/login", response_model=TokenResponse)
-def login(body: LoginRequest):
-    if body.username != settings.demo_username or body.password != settings.demo_password:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="invalid credentials",
-        )
-    return TokenResponse(access_token=create_access_token(body.username))
-
-
 @app.get("/domains", response_model=list[DomainInfo])
-def list_domains(_user: str = Depends(get_current_user)):
+def list_domains(_user: TiUser = Depends(get_current_user)):
     return [
         DomainInfo(id=domain_id, name=name, version=deps.domain_version(domain_id))
         for domain_id, name in deps.DOMAIN_CATALOG
@@ -69,7 +60,7 @@ def list_domains(_user: str = Depends(get_current_user)):
 
 
 @app.get("/domains/{domain_id}/recommended")
-def list_recommended(domain_id: str, _user: str = Depends(get_current_user)):
+def list_recommended(domain_id: str, _user: TiUser = Depends(get_current_user)):
     known = {d for d, _ in deps.DOMAIN_CATALOG}
     if domain_id not in known:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="unknown domain")
@@ -81,7 +72,7 @@ def list_recommended(domain_id: str, _user: str = Depends(get_current_user)):
 def ask(
     body: AskBody,
     session: Session = Depends(get_session),
-    _user: str = Depends(get_current_user),
+    _user: TiUser = Depends(get_current_user),
 ):
     extra_terms = deps.load_domain_terms(session, body.domain)
     extra_examples = deps.load_domain_examples(session, body.domain)
@@ -99,4 +90,5 @@ def ask(
         truncated=resp.truncated,
         chart=resp.chart,
         narrative=resp.narrative,
+        steps=[],
     )
