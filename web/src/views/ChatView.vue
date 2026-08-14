@@ -1,16 +1,5 @@
 <template>
   <div class="chat-page">
-    <header class="topbar">
-      <div class="brand">
-        <img src="/logo.svg" alt="元景.智数" class="logo" />
-        <div>
-          <strong>元景.智数</strong>
-          <span>域洞察工作台</span>
-        </div>
-      </div>
-      <button type="button" class="ghost" @click="logout">退出</button>
-    </header>
-
     <section class="workspace">
       <nav class="domain-tabs" aria-label="业务域">
         <button
@@ -67,13 +56,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
-import {
-  ask,
-  clearToken,
-  friendlyError,
-  listRecommended,
-} from "../api";
+import { ask, friendlyError, listRecommended } from "../api";
 import type { AskResponse, RecommendedItem } from "../api";
 import ResultPanel from "../components/ResultPanel.vue";
 
@@ -83,7 +66,6 @@ const domainTabs = [
   { id: "cs", label: "客服" },
 ] as const;
 
-const router = useRouter();
 const activeDomain = ref<string>("biz");
 const recommended = ref<RecommendedItem[]>([]);
 const question = ref("");
@@ -139,11 +121,6 @@ async function askRecommended(text: string) {
   await sendAsk();
 }
 
-function logout() {
-  clearToken();
-  router.replace({ name: "login" });
-}
-
 onMounted(() => {
   void loadRecommended(activeDomain.value);
 });
@@ -151,49 +128,9 @@ onMounted(() => {
 
 <style scoped>
 .chat-page {
-  position: relative;
-  z-index: 1;
-  min-height: 100vh;
+  height: 100%;
+  min-height: calc(100vh - 58px);
   padding: 1.25rem 1.25rem 2rem;
-}
-
-.topbar {
-  max-width: 980px;
-  margin: 0 auto 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.logo {
-  width: 40px;
-  height: 40px;
-}
-
-.brand strong {
-  display: block;
-  font-size: 1.15rem;
-  color: var(--ink);
-}
-
-.brand span {
-  color: var(--muted);
-  font-size: 0.82rem;
-}
-
-.ghost {
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.7);
-  color: var(--ink-soft);
-  border-radius: 999px;
-  padding: 0.45rem 0.9rem;
 }
 
 .workspace {

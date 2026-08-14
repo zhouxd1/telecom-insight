@@ -1,13 +1,17 @@
 <template>
   <main class="login-page">
-    <section class="login-panel">
-      <header class="brand">
-        <img src="/logo.svg" alt="元景.智数" class="logo" />
-        <div>
-          <h1>元景.智数</h1>
-          <p>电信域数据问答与洞察</p>
-        </div>
-      </header>
+    <div class="login-atmosphere" aria-hidden="true">
+      <div class="orb orb-a" />
+      <div class="orb orb-b" />
+      <div class="grid-fade" />
+    </div>
+
+    <section class="login-stage">
+      <div class="hero-brand">
+        <img src="/logo.svg" alt="元景.智数" class="hero-logo" />
+        <h1>元景.智数</h1>
+        <p>电信域数据问答与经营洞察</p>
+      </div>
 
       <form class="login-form" @submit.prevent="onSubmit">
         <label>
@@ -68,43 +72,88 @@ async function onSubmit() {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 2rem;
+  padding: 2rem 1.25rem;
+  overflow: hidden;
+  background: #061018;
 }
 
-.login-panel {
-  width: min(420px, 100%);
-  padding: 2rem 2rem 1.5rem;
-  border: 1px solid var(--line);
-  border-radius: calc(var(--radius) + 4px);
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(10px);
-  animation: rise 420ms ease-out;
+.login-atmosphere {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 0.9rem;
-  margin-bottom: 1.6rem;
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(8px);
 }
 
-.logo {
-  width: 52px;
-  height: 52px;
+.orb-a {
+  width: 52vw;
+  height: 52vw;
+  left: -12vw;
+  top: -18vw;
+  background: radial-gradient(circle, rgba(20, 184, 166, 0.38), transparent 68%);
+  animation: drift 14s ease-in-out infinite alternate;
 }
 
-.brand h1 {
+.orb-b {
+  width: 42vw;
+  height: 42vw;
+  right: -10vw;
+  bottom: -16vw;
+  background: radial-gradient(circle, rgba(11, 31, 42, 0.95), rgba(15, 118, 110, 0.28) 45%, transparent 70%);
+  animation: drift 18s ease-in-out infinite alternate-reverse;
+}
+
+.grid-fade {
+  position: absolute;
+  inset: 0;
+  opacity: 0.28;
+  background-image:
+    linear-gradient(rgba(232, 245, 242, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(232, 245, 242, 0.05) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(circle at 50% 40%, #000 20%, transparent 72%);
+}
+
+.login-stage {
+  position: relative;
+  width: min(440px, 100%);
+  padding: 2.4rem 2rem 1.7rem;
+  border-radius: 22px;
+  border: 1px solid rgba(232, 245, 242, 0.14);
+  background: rgba(244, 250, 249, 0.92);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(14px);
+  animation: rise 480ms ease-out;
+}
+
+.hero-brand {
+  text-align: center;
+  margin-bottom: 1.7rem;
+}
+
+.hero-logo {
+  width: 72px;
+  height: 72px;
+  margin-bottom: 0.85rem;
+  filter: drop-shadow(0 10px 24px rgba(15, 118, 110, 0.35));
+}
+
+.hero-brand h1 {
   margin: 0;
-  font-size: 1.55rem;
-  letter-spacing: 0.02em;
+  font-size: clamp(2rem, 4vw, 2.45rem);
+  letter-spacing: 0.06em;
   color: var(--ink);
+  font-weight: 700;
 }
 
-.brand p {
-  margin: 0.2rem 0 0;
+.hero-brand p {
+  margin: 0.45rem 0 0;
   color: var(--muted);
-  font-size: 0.92rem;
+  font-size: 0.95rem;
 }
 
 .login-form {
@@ -124,9 +173,9 @@ label span {
 
 input {
   width: 100%;
-  padding: 0.7rem 0.85rem;
+  padding: 0.75rem 0.9rem;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 12px;
   background: #fff;
   color: var(--text);
   outline: none;
@@ -139,10 +188,10 @@ input:focus {
 }
 
 button[type="submit"] {
-  margin-top: 0.3rem;
+  margin-top: 0.35rem;
   border: 0;
-  border-radius: 10px;
-  padding: 0.78rem 1rem;
+  border-radius: 12px;
+  padding: 0.82rem 1rem;
   background: linear-gradient(135deg, var(--ink) 0%, var(--teal) 100%);
   color: #f4fffc;
   font-weight: 600;
@@ -166,6 +215,7 @@ button[type="submit"]:disabled {
 
 .hint {
   margin: 1rem 0 0;
+  text-align: center;
   color: var(--muted);
   font-size: 0.82rem;
 }
@@ -173,11 +223,20 @@ button[type="submit"]:disabled {
 @keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(14px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(24px, -18px, 0) scale(1.06);
   }
 }
 </style>
