@@ -5,6 +5,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="TI_")
 
     jwt_secret: str = "dev-secret-change-me"
+    fernet_key: str = ""
     demo_username: str = "demo"
     demo_password: str = "demo123"
     packs_root: str = "packs"
