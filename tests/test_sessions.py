@@ -34,7 +34,9 @@ def client(tmp_path, monkeypatch):
     engine = db.get_engine()
     init_db(engine)
     seed_tenant_bootstrap(engine, default_database_url="sqlite://")
-    monkeypatch.setattr("apps.api.deps.get_ask_engine", lambda _session=None: FakeAskEngine())
+    monkeypatch.setattr(
+        "apps.api.deps.get_ask_engine", lambda *_a, **_k: FakeAskEngine()
+    )
     with TestClient(app) as c:
         yield c
     db.reset_engine()

@@ -52,12 +52,14 @@ class AskEngine:
         packs_by_domain: dict[str, IndustryPack],
         audit: InMemoryAuditLog | None = None,
         max_rows: int = 200,
+        dialect: str = "postgres",
     ):
         self.warehouse = warehouse
         self.llm = llm
         self.packs = packs_by_domain
         self.audit = audit or InMemoryAuditLog()
         self.max_rows = max_rows
+        self.dialect = dialect
 
     def ask(
         self,
@@ -65,6 +67,7 @@ class AskEngine:
         *,
         extra_terms: list[Term] | None = None,
         extra_examples: list[Example] | None = None,
+        dialect: str | None = None,
     ) -> AskResponse:
         pack = self.packs.get(req.domain)
         if not pack:
@@ -80,6 +83,7 @@ class AskEngine:
 
         schema_ctx = retrieve_schema_context(pack, req.question)
         terminology, examples = merge_pack_context(pack, extra_terms, extra_examples)
+        guard_dialect = dialect if dialect is not None else self.dialect
         try:
             sql = self.llm.generate_sql(
                 question=req.question,
@@ -87,7 +91,7 @@ class AskEngine:
                 examples=examples,
                 terminology=terminology,
             )
-            sql = guard_sql(sql, set(pack.table_whitelist))
+            sql = guard_sql(sql, set(pack.table_whitelist), dialect=guard_dialect)
             rows, truncated = execute_select(self.warehouse, sql, max_rows=self.max_rows)
             narrative = self.llm.narrate(question=req.question, sql=sql, rows_preview=rows)
             chart = build_chart_option(rows)

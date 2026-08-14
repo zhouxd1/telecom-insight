@@ -70,6 +70,22 @@ def _get_workspace_example(
     return row
 
 
+def _require_domain_write(access: EffectiveAccess, domain: str) -> None:
+    """org_admin: all domains; others need domain in access.domains; viewers blocked."""
+    if access.role == "viewer" or not access.can_ask:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="write not allowed",
+        )
+    if access.role == "org_admin":
+        return
+    if domain not in access.domains:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="domain not allowed",
+        )
+
+
 # --- Models ---
 
 
@@ -203,7 +219,8 @@ def create_term(
     session: Session = Depends(get_session),
     ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    workspace, _access = ws_access
+    workspace, access = ws_access
+    _require_domain_write(access, body.domain)
     row = TiTerm(
         domain=body.domain,
         term=body.term,
@@ -234,9 +251,11 @@ def update_term(
     session: Session = Depends(get_session),
     ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    workspace, _access = ws_access
+    workspace, access = ws_access
     row = _get_workspace_term(session, term_id, workspace)
-    for key, value in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    _require_domain_write(access, data.get("domain", row.domain))
+    for key, value in data.items():
         setattr(row, key, value)
     row.updated_at = _utcnow()
     session.add(row)
@@ -284,7 +303,8 @@ def create_example(
     session: Session = Depends(get_session),
     ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    workspace, _access = ws_access
+    workspace, access = ws_access
+    _require_domain_write(access, body.domain)
     row = TiSqlExample(
         domain=body.domain,
         question=body.question,
@@ -314,9 +334,11 @@ def update_example(
     session: Session = Depends(get_session),
     ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    workspace, _access = ws_access
+    workspace, access = ws_access
     row = _get_workspace_example(session, example_id, workspace)
-    for key, value in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    _require_domain_write(access, data.get("domain", row.domain))
+    for key, value in data.items():
         setattr(row, key, value)
     row.updated_at = _utcnow()
     session.add(row)

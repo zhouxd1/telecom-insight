@@ -4,13 +4,16 @@ from pathlib import Path
 from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
 
 from apps.api.acl import EffectiveAccess, resolve_access
 from apps.api.auth import decode_token
 from apps.api.db import get_session
+from apps.api.db_types import PROTOCOL_FAMILY
 from apps.api.models_db import (
     TiAiModel,
+    TiDatasource,
     TiSqlExample,
     TiTerm,
     TiUser,
@@ -20,6 +23,7 @@ from apps.api.models_db import (
 from apps.api.settings import settings
 from apps.engine.ask import AskEngine
 from apps.engine.llm import OpenAICompatibleLLM
+from apps.engine.sql_guard import resolve_sqlglot_dialect
 from apps.packs.loader import load_pack
 from apps.packs.models import Example, IndustryPack, Term
 
@@ -195,6 +199,30 @@ def load_domain_examples(session: Session, domain: str) -> list[Example]:
     return [Example(question=r.question, sql=r.sql) for r in rows]
 
 
+def resolve_datasource(
+    session: Session,
+    workspace_id: int,
+    chat_datasource_id: int | None = None,
+) -> TiDatasource | None:
+    """Prefer session-bound datasource (if in workspace), else workspace default."""
+    if chat_datasource_id is not None:
+        ds = session.get(TiDatasource, chat_datasource_id)
+        if ds is not None and ds.workspace_id == workspace_id:
+            return ds
+    return session.exec(
+        select(TiDatasource).where(
+            TiDatasource.workspace_id == workspace_id,
+            TiDatasource.is_default.is_(True),
+        )
+    ).first()
+
+
+def dialect_for_datasource(ds: TiDatasource) -> str:
+    """sqlglot dialect for a datasource db_type / protocol family."""
+    family = PROTOCOL_FAMILY.get(ds.db_type, ds.db_type)
+    return resolve_sqlglot_dialect(family)
+
+
 def resolve_llm(session: Session | None, packs: dict[str, IndustryPack]):
     """Prefer enabled TiAiModel with api_key; else DemoFakeLLM (or settings key)."""
     if session is not None:
@@ -214,11 +242,21 @@ def resolve_llm(session: Session | None, packs: dict[str, IndustryPack]):
     return DemoFakeLLM(packs)
 
 
-def get_ask_engine(session: Session | None = None) -> AskEngine:
+def get_ask_engine(
+    session: Session | None = None,
+    *,
+    warehouse: Engine | None = None,
+    dialect: str = "postgres",
+) -> AskEngine:
     packs = get_packs()
-    warehouse = create_engine(settings.database_url)
+    eng = warehouse if warehouse is not None else create_engine(settings.database_url)
     llm = resolve_llm(session, packs)
-    return AskEngine(warehouse=warehouse, llm=llm, packs_by_domain=packs)
+    return AskEngine(
+        warehouse=eng,
+        llm=llm,
+        packs_by_domain=packs,
+        dialect=dialect,
+    )
 
 
 def domain_version(domain: str) -> str:
