@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import create_engine
 from sqlmodel import Session, select
@@ -140,12 +140,22 @@ def get_workspace_access(
     return workspace, access
 
 
+_WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
 def require_workspace(
+    request: Request,
     x_workspace_id: int = Header(..., alias="X-Workspace-Id"),
     user: TiUser = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> tuple[TiWorkspace, EffectiveAccess]:
-    return get_workspace_access(session, user, x_workspace_id)
+    workspace, access = get_workspace_access(session, user, x_workspace_id)
+    if workspace.status == "archived" and request.method.upper() in _WRITE_METHODS:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="workspace is archived",
+        )
+    return workspace, access
 
 
 def require_org_admin(user: TiUser = Depends(get_current_user)) -> TiUser:

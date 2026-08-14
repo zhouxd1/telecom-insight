@@ -111,3 +111,31 @@ def test_list_workspaces_and_archive(client_admin):
     )
     assert archived.status_code == 200
     assert archived.json()["status"] == "archived"
+
+
+def test_archived_workspace_rejects_writes(client_admin):
+    created = client_admin.post("/workspaces", json={"name": "归档写禁"})
+    assert created.status_code == 200
+    ws_id = created.json()["id"]
+    archived = client_admin.patch(f"/workspaces/{ws_id}", json={"status": "archived"})
+    assert archived.status_code == 200
+
+    ws_headers = {"X-Workspace-Id": str(ws_id)}
+
+    listed = client_admin.get("/sessions", headers=ws_headers)
+    assert listed.status_code == 200
+
+    created_session = client_admin.post(
+        "/sessions",
+        headers=ws_headers,
+        json={"domain": "biz", "title": "should fail"},
+    )
+    assert created_session.status_code == 403
+    assert "archived" in created_session.json()["detail"].lower()
+
+    created_term = client_admin.post(
+        "/admin/terms",
+        headers=ws_headers,
+        json={"domain": "biz", "term": "t", "standard": "s"},
+    )
+    assert created_term.status_code == 403
