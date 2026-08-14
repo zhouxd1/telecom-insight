@@ -6,3 +6,5 @@ dist/
 .superpowers/
 *.pyc
 .DS_Store
+
+.worktrees/
