@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "telecom-insight"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+  "sqlmodel>=0.0.22",
+  "psycopg[binary]>=3.2.0",
+  "pyyaml>=6.0.2",
+  "pydantic-settings>=2.4.0",
+  "python-jose[cryptography]>=3.3.0",
+  "passlib[bcrypt]>=1.7.4",
+  "httpx>=0.27.0",
+  "langchain>=0.3.0",
+  "langchain-openai>=0.2.0",
+  "sqlglot>=25.0.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0", "pytest-asyncio>=0.24.0"]
+
+[tool.setuptools.packages.find]
+include = ["apps*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
