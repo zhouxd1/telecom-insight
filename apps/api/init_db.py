@@ -4,6 +4,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from passlib.context import CryptContext
+from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, select
 
@@ -27,9 +28,32 @@ _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 _ALL_DOMAINS = ["biz", "network", "cs"]
 
+# (table, column, SQL type for ADD COLUMN)
+_PHASE1B_COLUMNS: list[tuple[str, str, str]] = [
+    ("ti_chat_session", "workspace_id", "INTEGER"),
+    ("ti_chat_session", "datasource_id", "INTEGER"),
+    ("ti_ai_model", "workspace_id", "INTEGER"),
+    ("ti_term", "workspace_id", "INTEGER"),
+    ("ti_sql_example", "workspace_id", "INTEGER"),
+]
+
+
+def _ensure_columns(engine: Engine) -> None:
+    """Add Phase 1b columns to existing 1a tables (create_all does not alter)."""
+    inspector = inspect(engine)
+    with engine.begin() as conn:
+        for table, column, col_type in _PHASE1B_COLUMNS:
+            if table not in inspector.get_table_names():
+                continue
+            existing = {c["name"] for c in inspector.get_columns(table)}
+            if column in existing:
+                continue
+            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+
 
 def init_db(engine: Engine) -> None:
     SQLModel.metadata.create_all(engine)
+    _ensure_columns(engine)
 
 
 def _parse_database_url(url: str) -> dict:
