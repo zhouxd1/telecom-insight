@@ -242,3 +242,50 @@ class MessageOut(BaseModel):
 
 class SessionAskBody(BaseModel):
     question: str
+
+
+# --- Datasources ---
+
+
+class DatasourceCreate(BaseModel):
+    name: str
+    db_type: str
+    host: str = ""
+    port: Optional[int] = None
+    database: str = ""
+    username: str = ""
+    password: Optional[str] = None
+    extra_json: Optional[dict[str, Any]] = None
+    is_default: bool = False
+
+
+class DatasourceUpdate(BaseModel):
+    name: Optional[str] = None
+    db_type: Optional[str] = None
+    host: Optional[str] = None
+    port: Optional[int] = None
+    database: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+    extra_json: Optional[dict[str, Any]] = None
+    is_default: Optional[bool] = None
+
+
+class DatasourceOut(BaseModel):
+    id: int
+    workspace_id: int
+    name: str
+    db_type: str
+    host: str
+    port: Optional[int] = None
+    database: str
+    username: str
+    extra_json: Optional[dict[str, Any]] = None
+    is_default: bool
+    last_ok_at: Optional[datetime] = None
+    last_error: Optional[str] = None
+
+
+class DatasourceTestResult(BaseModel):
+    ok: bool
+    error: Optional[str] = None

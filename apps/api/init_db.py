@@ -8,6 +8,7 @@ from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, select
 
 import apps.api.models_db  # noqa: F401 — register table metadata
+from apps.api.crypto import encrypt_secret
 from apps.api.models_db import (
     TiAiModel,
     TiChatSession,
@@ -55,14 +56,15 @@ def _parse_database_url(url: str) -> dict:
     db_type = "postgres" if scheme in {"postgresql", "postgres"} else scheme or "postgres"
     database = unquote(parsed.path.lstrip("/")) if parsed.path else ""
     username = unquote(parsed.username) if parsed.username else ""
-    # Leave password_enc blank until Task 2 crypto; never store plaintext.
+    password = unquote(parsed.password) if parsed.password else ""
+    password_enc = encrypt_secret(password) if password else ""
     return {
         "db_type": db_type,
         "host": parsed.hostname or "",
         "port": parsed.port,
         "database": database,
         "username": username,
-        "password_enc": "",
+        "password_enc": password_enc,
     }
 
 
