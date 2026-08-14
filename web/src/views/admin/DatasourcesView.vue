@@ -3,7 +3,7 @@
     <header class="page-head">
       <div>
         <h1>数据源</h1>
-        <p>管理当前工作空间的执行库连接；密码只写不回显。</p>
+        <p>管理当前工作空间的执行库连接（测连、设默认、多库类型）。</p>
       </div>
       <button type="button" class="primary" @click="openCreate">新建数据源</button>
     </header>
@@ -30,7 +30,7 @@
           <tr v-for="row in rows" :key="row.id">
             <td>{{ row.name }}</td>
             <td class="mono">{{ row.db_type }}</td>
-            <td class="mono">{{ row.host || "—" }}</td>
+            <td class="mono">{{ formatHost(row) }}</td>
             <td class="mono">{{ row.database || "—" }}</td>
             <td>
               <span class="pill" :class="{ on: row.is_default }">{{
@@ -62,26 +62,26 @@
           <span>数据库类型</span>
           <select v-model="form.db_type" required>
             <optgroup label="P0 支持">
-              <option v-for="t in p0Types" :key="t" :value="t">{{ t }}</option>
+              <option v-for="t in p0Types" :key="t.id" :value="t.id">{{ t.label }}</option>
             </optgroup>
             <optgroup label="P1 即将支持">
-              <option v-for="t in p1Types" :key="t" :value="t" disabled>
-                {{ t }}（即将支持）
+              <option v-for="t in p1Types" :key="t.id" :value="t.id" disabled>
+                {{ t.label }}（即将支持）
               </option>
             </optgroup>
           </select>
         </label>
         <label>
           <span>主机</span>
-          <input v-model="form.host" required />
+          <input v-model="form.host" placeholder="localhost" />
         </label>
         <label>
           <span>端口</span>
-          <input v-model.number="form.port" type="number" min="1" max="65535" />
+          <input v-model.number="form.port" type="number" min="1" max="65535" placeholder="可选" />
         </label>
         <label>
           <span>数据库</span>
-          <input v-model="form.database" required />
+          <input v-model="form.database" />
         </label>
         <label>
           <span>用户名</span>
@@ -93,7 +93,7 @@
             v-model="form.password"
             type="password"
             autocomplete="new-password"
-            :placeholder="editingId == null ? '' : '••••'"
+            :placeholder="editingId == null ? '' : '留空则不修改'"
           />
         </label>
         <label class="check">
@@ -125,19 +125,24 @@ import {
 } from "../../api";
 
 const p0Types = [
-  "postgres",
-  "mysql",
-  "sqlserver",
-  "hive",
-  "opengauss",
-  "gaussdb",
-  "oceanbase_mysql",
-  "tidb",
-  "kingbase",
-  "dameng",
+  { id: "postgres", label: "PostgreSQL" },
+  { id: "mysql", label: "MySQL" },
+  { id: "sqlserver", label: "SQL Server" },
+  { id: "hive", label: "Hive" },
+  { id: "opengauss", label: "openGauss" },
+  { id: "gaussdb", label: "GaussDB" },
+  { id: "oceanbase_mysql", label: "OceanBase MySQL" },
+  { id: "tidb", label: "TiDB" },
+  { id: "kingbase", label: "人大金仓 Kingbase" },
+  { id: "dameng", label: "达梦 Dameng" },
 ] as const;
 
-const p1Types = ["gbase", "shentong", "polardb", "tdsql"] as const;
+const p1Types = [
+  { id: "gbase", label: "GBase" },
+  { id: "shentong", label: "神通" },
+  { id: "polardb", label: "PolarDB" },
+  { id: "tdsql", label: "TDSQL" },
+] as const;
 
 const rows = ref<Datasource[]>([]);
 const loading = ref(false);
@@ -149,7 +154,7 @@ const editingId = ref<number | null>(null);
 
 const form = reactive({
   name: "",
-  db_type: "postgres" as string,
+  db_type: "postgres",
   host: "",
   port: null as number | null,
   database: "",
@@ -158,11 +163,18 @@ const form = reactive({
   is_default: false,
 });
 
+function formatHost(row: Datasource): string {
+  if (!row.host) return "—";
+  return row.port != null ? `${row.host}:${row.port}` : row.host;
+}
+
 function formatTime(value?: string | null): string {
   if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleString();
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return value;
+  }
 }
 
 async function refresh() {
@@ -198,10 +210,10 @@ function openEdit(row: Datasource) {
   editingId.value = row.id;
   form.name = row.name;
   form.db_type = row.db_type;
-  form.host = row.host || "";
+  form.host = row.host;
   form.port = row.port ?? null;
-  form.database = row.database || "";
-  form.username = row.username || "";
+  form.database = row.database;
+  form.username = row.username;
   form.password = "";
   form.is_default = row.is_default;
   dialogOpen.value = true;
@@ -216,33 +228,30 @@ async function onSave() {
   error.value = "";
   note.value = "";
   try {
-    const payload: {
-      name: string;
-      db_type: string;
-      host: string;
-      port: number | null;
-      database: string;
-      username: string;
-      password?: string;
-      is_default: boolean;
-    } = {
+    const portValue =
+      form.port == null || Number.isNaN(Number(form.port)) ? null : Number(form.port);
+    const payload = {
       name: form.name.trim(),
       db_type: form.db_type,
       host: form.host.trim(),
-      port: form.port == null || Number.isNaN(Number(form.port)) ? null : Number(form.port),
+      port: portValue,
       database: form.database.trim(),
       username: form.username.trim(),
       is_default: form.is_default,
     };
-    if (form.password) {
-      payload.password = form.password;
-    }
     if (editingId.value == null) {
-      await createDatasource(payload);
-      note.value = "数据源已创建。";
+      await createDatasource({
+        ...payload,
+        password: form.password || undefined,
+      });
+      note.value = `已创建数据源「${payload.name}」`;
     } else {
-      await updateDatasource(editingId.value, payload);
-      note.value = "数据源已更新。";
+      const patch: Parameters<typeof updateDatasource>[1] = { ...payload };
+      if (form.password) {
+        patch.password = form.password;
+      }
+      await updateDatasource(editingId.value, patch);
+      note.value = `已更新数据源「${payload.name}」`;
     }
     dialogOpen.value = false;
     await refresh();
@@ -259,7 +268,7 @@ async function onDelete(row: Datasource) {
   note.value = "";
   try {
     await deleteDatasource(row.id);
-    note.value = `已删除「${row.name}」。`;
+    note.value = `已删除「${row.name}」`;
     await refresh();
   } catch (err) {
     error.value = friendlyError(err);
@@ -272,7 +281,7 @@ async function onTest(row: Datasource) {
   try {
     const result = await testDatasource(row.id);
     if (result.ok) {
-      note.value = `测连「${row.name}」成功。`;
+      note.value = `测连「${row.name}」成功`;
     } else {
       error.value = `测连「${row.name}」失败：${result.error || "unknown"}`;
     }
@@ -287,7 +296,7 @@ async function onSetDefault(row: Datasource) {
   note.value = "";
   try {
     await setDefaultDatasource(row.id);
-    note.value = `已将「${row.name}」设为默认。`;
+    note.value = `已将「${row.name}」设为默认`;
     await refresh();
   } catch (err) {
     error.value = friendlyError(err);

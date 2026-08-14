@@ -3,12 +3,12 @@
     <header class="page-head">
       <div>
         <h1>用户</h1>
-        <p>管理组织账号、角色与启用状态。</p>
+        <p>管理组织内账号、组织角色与启用状态。</p>
       </div>
       <button
-        v-if="isOrgAdmin"
         type="button"
         class="primary"
+        :disabled="!isOrgAdmin"
         @click="openCreate"
       >
         新建用户
@@ -16,14 +16,14 @@
     </header>
 
     <p v-if="!isOrgAdmin && meLoaded" class="banner error" role="alert">
-      仅组织管理员（org_admin）可管理用户。
+      仅组织管理员可管理用户。
     </p>
     <p v-if="error" class="banner error" role="alert">{{ error }}</p>
     <p v-if="note" class="banner ok">{{ note }}</p>
 
     <div class="table-card">
-      <div v-if="!isOrgAdmin && meLoaded" class="empty">无权限查看用户列表。</div>
-      <div v-else-if="loading" class="empty">加载中…</div>
+      <div v-if="loading" class="empty">加载中…</div>
+      <div v-else-if="!isOrgAdmin" class="empty">无权查看组织用户列表。</div>
       <div v-else-if="!rows.length" class="empty">暂无用户。</div>
       <table v-else>
         <thead>
@@ -74,7 +74,7 @@
             type="password"
             autocomplete="new-password"
             :required="editingId == null"
-            :placeholder="editingId == null ? '' : '••••'"
+            :placeholder="editingId == null ? '' : '留空则不修改'"
           />
         </label>
         <label>
@@ -84,9 +84,9 @@
         <label>
           <span>组织角色</span>
           <select v-model="form.org_role" required>
-            <option value="org_admin">org_admin（组织管理员）</option>
-            <option value="analyst">analyst（分析师）</option>
-            <option value="viewer">viewer（只读）</option>
+            <option value="org_admin">组织管理员</option>
+            <option value="analyst">分析师</option>
+            <option value="viewer">只读</option>
           </select>
         </label>
         <label class="check">
@@ -129,14 +129,14 @@ const form = reactive({
   username: "",
   password: "",
   display_name: "",
-  org_role: "analyst",
+  org_role: "viewer",
   enabled: true,
 });
 
 function roleLabel(role: string): string {
-  if (role === "org_admin") return "org_admin";
-  if (role === "analyst") return "analyst";
-  if (role === "viewer") return "viewer";
+  if (role === "org_admin") return "组织管理员";
+  if (role === "analyst") return "分析师";
+  if (role === "viewer") return "只读";
   return role;
 }
 
@@ -171,17 +171,19 @@ function resetForm() {
   form.username = "";
   form.password = "";
   form.display_name = "";
-  form.org_role = "analyst";
+  form.org_role = "viewer";
   form.enabled = true;
 }
 
 function openCreate() {
+  if (!isOrgAdmin.value) return;
   editingId.value = null;
   resetForm();
   dialogOpen.value = true;
 }
 
 function openEdit(row: OrgUser) {
+  if (!isOrgAdmin.value) return;
   editingId.value = row.id;
   form.username = row.username;
   form.password = "";
@@ -201,30 +203,28 @@ async function onSave() {
   note.value = "";
   try {
     if (editingId.value == null) {
-      await createUser({
+      const created = await createUser({
         username: form.username.trim(),
         password: form.password,
         display_name: form.display_name.trim(),
         org_role: form.org_role,
         enabled: form.enabled,
       });
-      note.value = "用户已创建。";
+      if (!form.enabled) {
+        await updateUser(created.id, { enabled: false });
+      }
+      note.value = `已创建用户「${form.username.trim()}」`;
     } else {
-      const payload: {
-        display_name: string;
-        org_role: string;
-        enabled: boolean;
-        password?: string;
-      } = {
+      const patch: Parameters<typeof updateUser>[1] = {
         display_name: form.display_name.trim(),
         org_role: form.org_role,
         enabled: form.enabled,
       };
       if (form.password) {
-        payload.password = form.password;
+        patch.password = form.password;
       }
-      await updateUser(editingId.value, payload);
-      note.value = "用户已更新。";
+      await updateUser(editingId.value, patch);
+      note.value = `已更新用户「${form.username}」`;
     }
     dialogOpen.value = false;
     await refresh();

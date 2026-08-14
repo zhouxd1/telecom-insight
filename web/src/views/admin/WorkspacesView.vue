@@ -3,20 +3,20 @@
     <header class="page-head">
       <div>
         <h1>工作空间</h1>
-        <p>管理组织下的工作空间与成员（角色 / 业务域）。</p>
+        <p>组织下的空间列表；可创建、归档，并管理成员角色与业务域。</p>
       </div>
       <button
-        v-if="isOrgAdmin"
         type="button"
         class="primary"
+        :disabled="!isOrgAdmin"
         @click="openCreate"
       >
         新建工作空间
       </button>
     </header>
 
-    <p v-if="!isOrgAdmin && meLoaded" class="banner ok">
-      当前账号非组织管理员，仅可查看已加入的工作空间。
+    <p v-if="!isOrgAdmin && meLoaded" class="banner error" role="alert">
+      仅组织管理员可创建/归档工作空间并管理成员。
     </p>
     <p v-if="error" class="banner error" role="alert">{{ error }}</p>
     <p v-if="note" class="banner ok">{{ note }}</p>
@@ -38,22 +38,18 @@
             <td>{{ row.name }}</td>
             <td>
               <span class="pill" :class="{ on: row.status === 'active' }">{{
-                row.status === "active" ? "活跃" : "已归档"
+                statusLabel(row.status)
               }}</span>
             </td>
             <td class="mono">{{ formatTime(row.created_at) }}</td>
             <td class="actions">
-              <button
-                v-if="isOrgAdmin"
-                type="button"
-                @click="openMembers(row)"
-              >
+              <button type="button" :disabled="!isOrgAdmin" @click="openMembers(row)">
                 成员
               </button>
               <button
-                v-if="isOrgAdmin && row.status === 'active'"
                 type="button"
                 class="danger"
+                :disabled="!isOrgAdmin || row.status === 'archived'"
                 @click="onArchive(row)"
               >
                 归档
@@ -69,7 +65,7 @@
         <h2>新建工作空间</h2>
         <label>
           <span>名称</span>
-          <input v-model="createName" required />
+          <input v-model="createName" required maxlength="120" />
         </label>
         <div class="modal-actions">
           <button type="button" class="ghost" @click="closeCreate">取消</button>
@@ -80,54 +76,14 @@
       </form>
     </div>
 
-    <div v-if="memberOpen" class="drawer-backdrop" @click.self="closeMembers">
-      <aside class="drawer" role="dialog" aria-label="工作空间成员">
-        <header class="drawer-head">
-          <div>
-            <h2>成员 · {{ memberWorkspace?.name }}</h2>
-            <p>添加用户并设置角色与业务域权限。</p>
-          </div>
-          <button type="button" class="ghost" @click="closeMembers">关闭</button>
-        </header>
+    <div v-if="membersOpen" class="modal-backdrop" @click.self="closeMembers">
+      <div class="modal modal-wide">
+        <h2>成员 — {{ membersWorkspace?.name }}</h2>
 
-        <p v-if="memberError" class="banner error" role="alert">{{ memberError }}</p>
+        <p v-if="membersError" class="banner error" role="alert">{{ membersError }}</p>
 
-        <form class="member-form" @submit.prevent="onAddMember">
-          <label>
-            <span>用户</span>
-            <select v-model.number="memberForm.user_id" required>
-              <option :value="0" disabled>选择用户</option>
-              <option
-                v-for="u in availableUsers"
-                :key="u.id"
-                :value="u.id"
-              >
-                {{ u.display_name || u.username }}（{{ u.username }}）
-              </option>
-            </select>
-          </label>
-          <label>
-            <span>角色</span>
-            <select v-model="memberForm.role" required>
-              <option value="org_admin">org_admin</option>
-              <option value="analyst">analyst</option>
-              <option value="viewer">viewer</option>
-            </select>
-          </label>
-          <fieldset class="domains">
-            <legend>业务域</legend>
-            <label v-for="d in domainOptions" :key="d.id" class="check">
-              <input v-model="memberForm.domains" type="checkbox" :value="d.id" />
-              <span>{{ d.label }}</span>
-            </label>
-          </fieldset>
-          <button type="submit" class="primary" :disabled="memberSaving || !memberForm.user_id">
-            {{ memberSaving ? "添加中…" : "添加成员" }}
-          </button>
-        </form>
-
-        <div class="table-card member-table">
-          <div v-if="memberLoading" class="empty">加载中…</div>
+        <div class="table-card nested">
+          <div v-if="membersLoading" class="empty">加载中…</div>
           <div v-else-if="!members.length" class="empty">暂无成员。</div>
           <table v-else>
             <thead>
@@ -141,8 +97,8 @@
             <tbody>
               <tr v-for="m in members" :key="m.id">
                 <td>{{ userLabel(m.user_id) }}</td>
-                <td>{{ m.role }}</td>
-                <td>{{ (m.domains || []).map(domainLabel).join("、") || "—" }}</td>
+                <td>{{ roleLabel(m.role) }}</td>
+                <td>{{ domainsLabel(m.domains) }}</td>
                 <td class="actions">
                   <button type="button" class="danger" @click="onRemoveMember(m)">移除</button>
                 </td>
@@ -150,7 +106,45 @@
             </tbody>
           </table>
         </div>
-      </aside>
+
+        <form class="add-member" @submit.prevent="onAddMember">
+          <h3>添加成员</h3>
+          <label>
+            <span>用户</span>
+            <select v-model.number="memberForm.user_id" required>
+              <option disabled :value="0">选择用户</option>
+              <option
+                v-for="u in addableUsers"
+                :key="u.id"
+                :value="u.id"
+              >
+                {{ u.display_name || u.username }}（{{ u.username }}）
+              </option>
+            </select>
+          </label>
+          <label>
+            <span>角色</span>
+            <select v-model="memberForm.role" required>
+              <option value="org_admin">组织管理员</option>
+              <option value="analyst">分析师</option>
+              <option value="viewer">只读</option>
+            </select>
+          </label>
+          <fieldset class="domain-set">
+            <legend>业务域</legend>
+            <label v-for="d in domainOptions" :key="d.id" class="check">
+              <input v-model="memberForm.domains" type="checkbox" :value="d.id" />
+              <span>{{ d.label }}</span>
+            </label>
+          </fieldset>
+          <div class="modal-actions">
+            <button type="button" class="ghost" @click="closeMembers">关闭</button>
+            <button type="submit" class="primary" :disabled="memberSaving || !addableUsers.length">
+              {{ memberSaving ? "添加中…" : "添加" }}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   </section>
 </template>
@@ -179,7 +173,7 @@ const domainOptions = [
 ] as const;
 
 const rows = ref<Workspace[]>([]);
-const users = ref<OrgUser[]>([]);
+const orgUsers = ref<OrgUser[]>([]);
 const loading = ref(false);
 const saving = ref(false);
 const error = ref("");
@@ -190,12 +184,12 @@ const isOrgAdmin = ref(false);
 const createOpen = ref(false);
 const createName = ref("");
 
-const memberOpen = ref(false);
-const memberWorkspace = ref<Workspace | null>(null);
+const membersOpen = ref(false);
+const membersWorkspace = ref<Workspace | null>(null);
 const members = ref<WorkspaceMember[]>([]);
-const memberLoading = ref(false);
+const membersLoading = ref(false);
+const membersError = ref("");
 const memberSaving = ref(false);
-const memberError = ref("");
 
 const memberForm = reactive({
   user_id: 0,
@@ -203,26 +197,44 @@ const memberForm = reactive({
   domains: ["biz", "network", "cs"] as string[],
 });
 
-const availableUsers = computed(() => {
-  const memberIds = new Set(members.value.map((m) => m.user_id));
-  return users.value.filter((u) => u.enabled && !memberIds.has(u.id));
+const addableUsers = computed(() => {
+  const taken = new Set(members.value.map((m) => m.user_id));
+  return orgUsers.value.filter((u) => u.enabled && !taken.has(u.id));
 });
 
-function domainLabel(id: string): string {
-  return domainOptions.find((d) => d.id === id)?.label ?? id;
+function statusLabel(status: string): string {
+  if (status === "active") return "活跃";
+  if (status === "archived") return "已归档";
+  return status;
+}
+
+function roleLabel(role: string): string {
+  if (role === "org_admin") return "组织管理员";
+  if (role === "analyst") return "分析师";
+  if (role === "viewer") return "只读";
+  return role;
+}
+
+function domainsLabel(domains: string[]): string {
+  if (!domains?.length) return "—";
+  return domains
+    .map((id) => domainOptions.find((d) => d.id === id)?.label ?? id)
+    .join("、");
 }
 
 function userLabel(userId: number): string {
-  const u = users.value.find((x) => x.id === userId);
+  const u = orgUsers.value.find((x) => x.id === userId);
   if (!u) return `#${userId}`;
   return u.display_name ? `${u.display_name}（${u.username}）` : u.username;
 }
 
 function formatTime(value?: string | null): string {
   if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleString();
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return value;
+  }
 }
 
 async function loadMe() {
@@ -249,6 +261,7 @@ async function refresh() {
 }
 
 function openCreate() {
+  if (!isOrgAdmin.value) return;
   createName.value = "";
   createOpen.value = true;
 }
@@ -262,9 +275,10 @@ async function onCreate() {
   error.value = "";
   note.value = "";
   try {
-    await createWorkspace({ name: createName.value.trim() });
+    const name = createName.value.trim();
+    await createWorkspace({ name });
     createOpen.value = false;
-    note.value = "工作空间已创建。";
+    note.value = `已创建工作空间「${name}」`;
     await refresh();
   } catch (err) {
     error.value = friendlyError(err);
@@ -274,12 +288,13 @@ async function onCreate() {
 }
 
 async function onArchive(row: Workspace) {
+  if (!isOrgAdmin.value) return;
   if (!window.confirm(`确认归档工作空间「${row.name}」？`)) return;
   error.value = "";
   note.value = "";
   try {
     await archiveWorkspace(row.id);
-    note.value = `已归档「${row.name}」。`;
+    note.value = `已归档「${row.name}」`;
     await refresh();
   } catch (err) {
     error.value = friendlyError(err);
@@ -287,160 +302,123 @@ async function onArchive(row: Workspace) {
 }
 
 async function openMembers(row: Workspace) {
-  memberWorkspace.value = row;
-  memberOpen.value = true;
-  memberError.value = "";
+  if (!isOrgAdmin.value) return;
+  membersWorkspace.value = row;
+  membersOpen.value = true;
+  membersError.value = "";
   memberForm.user_id = 0;
   memberForm.role = "analyst";
   memberForm.domains = ["biz", "network", "cs"];
-  memberLoading.value = true;
+  membersLoading.value = true;
   try {
-    const [memberRows, userRows] = await Promise.all([
+    const [memberRows, users] = await Promise.all([
       listMembers(row.id),
       listUsers(),
     ]);
     members.value = memberRows;
-    users.value = userRows;
+    orgUsers.value = users;
   } catch (err) {
-    memberError.value = friendlyError(err);
+    membersError.value = friendlyError(err);
   } finally {
-    memberLoading.value = false;
+    membersLoading.value = false;
   }
 }
 
 function closeMembers() {
-  memberOpen.value = false;
-  memberWorkspace.value = null;
+  membersOpen.value = false;
+  membersWorkspace.value = null;
 }
 
 async function onAddMember() {
-  if (!memberWorkspace.value || !memberForm.user_id) return;
+  if (!membersWorkspace.value || !memberForm.user_id) return;
   memberSaving.value = true;
-  memberError.value = "";
+  membersError.value = "";
   try {
-    await addMember(memberWorkspace.value.id, {
+    await addMember(membersWorkspace.value.id, {
       user_id: memberForm.user_id,
       role: memberForm.role,
       domains: [...memberForm.domains],
     });
-    members.value = await listMembers(memberWorkspace.value.id);
+    members.value = await listMembers(membersWorkspace.value.id);
     memberForm.user_id = 0;
-    note.value = "成员已添加。";
+    note.value = "已添加成员";
   } catch (err) {
-    memberError.value = friendlyError(err);
+    membersError.value = friendlyError(err);
   } finally {
     memberSaving.value = false;
   }
 }
 
 async function onRemoveMember(m: WorkspaceMember) {
-  if (!memberWorkspace.value) return;
-  if (!window.confirm(`确认移除成员 ${userLabel(m.user_id)}？`)) return;
-  memberError.value = "";
+  if (!membersWorkspace.value) return;
+  if (!window.confirm(`确认移除 ${userLabel(m.user_id)}？`)) return;
+  membersError.value = "";
   try {
-    await removeMember(memberWorkspace.value.id, m.user_id);
-    members.value = await listMembers(memberWorkspace.value.id);
-    note.value = "成员已移除。";
+    await removeMember(membersWorkspace.value.id, m.user_id);
+    members.value = await listMembers(membersWorkspace.value.id);
+    note.value = "已移除成员";
   } catch (err) {
-    memberError.value = friendlyError(err);
+    membersError.value = friendlyError(err);
   }
 }
 
-onMounted(async () => {
-  await loadMe();
-  await refresh();
+onMounted(() => {
+  void loadMe().then(() => refresh());
 });
 </script>
 
 <style src="./admin-shared.css"></style>
 <style scoped>
-.drawer-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  display: flex;
-  justify-content: flex-end;
-  background: rgba(26, 29, 36, 0.28);
+.modal-wide {
+  width: min(640px, 100%);
 }
 
-.drawer {
-  width: min(440px, 100%);
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-  padding: 1.25rem;
-  background: var(--surface);
-  border-left: 1px solid var(--line);
-  box-shadow: var(--shadow);
-  overflow: auto;
+.nested {
+  max-height: 240px;
+  margin-bottom: 0.75rem;
 }
 
-.drawer-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
+.add-member {
+  display: grid;
+  gap: 0.7rem;
 }
 
-.drawer-head h2 {
+.add-member h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 600;
   color: var(--ink);
 }
 
-.drawer-head p {
-  margin: 0.3rem 0 0;
-  color: var(--muted);
-  font-size: 0.82rem;
-}
-
-.member-form {
-  display: grid;
-  gap: 0.65rem;
-  padding: 0.85rem;
+.domain-set {
+  margin: 0;
+  padding: 0.55rem 0.7rem;
   border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  background: var(--surface-muted);
+  border-radius: var(--radius);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
 }
 
-.member-form label {
-  display: grid;
-  gap: 0.3rem;
-}
-
-.member-form label > span,
-.domains legend {
+.domain-set legend {
+  padding: 0 0.25rem;
   font-size: 0.78rem;
   color: var(--muted);
   font-weight: 500;
 }
 
-.member-form select {
-  width: 100%;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 0.5rem 0.65rem;
-  background: var(--surface);
-  color: var(--text);
-}
-
-.domains {
-  border: 0;
-  padding: 0;
-  margin: 0;
-  display: grid;
-  gap: 0.35rem;
-}
-
-.domains .check {
+.domain-set .check {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.4rem;
 }
 
-.member-table {
-  flex: 1;
+.domain-set .check input {
+  width: auto;
+}
+
+.domain-set .check span {
+  font-size: 0.85rem;
+  color: var(--text);
 }
 </style>
