@@ -9,6 +9,7 @@ from apps.api.db import get_engine
 from apps.api.deps import get_current_user
 from apps.api.init_db import init_db
 from apps.api.routes_admin import router as admin_router
+from apps.api.routes_sessions import router as sessions_router
 from apps.api.schemas import (
     AskApiResponse,
     AskBody,
@@ -37,6 +38,7 @@ app.add_middleware(
 )
 
 app.include_router(admin_router)
+app.include_router(sessions_router)
 
 
 @app.get("/health")
