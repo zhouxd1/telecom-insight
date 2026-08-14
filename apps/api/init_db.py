@@ -55,14 +55,14 @@ def _parse_database_url(url: str) -> dict:
     db_type = "postgres" if scheme in {"postgresql", "postgres"} else scheme or "postgres"
     database = unquote(parsed.path.lstrip("/")) if parsed.path else ""
     username = unquote(parsed.username) if parsed.username else ""
-    password = unquote(parsed.password) if parsed.password else ""
+    # Leave password_enc blank until Task 2 crypto; never store plaintext.
     return {
         "db_type": db_type,
         "host": parsed.hostname or "",
         "port": parsed.port,
         "database": database,
         "username": username,
-        "password_enc": password,
+        "password_enc": "",
     }
 
 
@@ -121,8 +121,19 @@ def seed_tenant_bootstrap(engine: Engine, default_database_url: str | None = Non
             session.flush()
         else:
             workspace = session.exec(
-                select(TiWorkspace).where(TiWorkspace.org_id == existing_org.id)
+                select(TiWorkspace).where(
+                    TiWorkspace.org_id == existing_org.id,
+                    TiWorkspace.name == "默认",
+                )
             ).first()
+            if workspace is None:
+                workspace = session.exec(
+                    select(TiWorkspace).where(TiWorkspace.name == "默认")
+                ).first()
+            if workspace is None:
+                workspace = session.exec(
+                    select(TiWorkspace).where(TiWorkspace.org_id == existing_org.id)
+                ).first()
             if workspace is None:
                 workspace = session.exec(select(TiWorkspace)).first()
 
