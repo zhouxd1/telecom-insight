@@ -5,12 +5,13 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 
 from apps.api import db
-from apps.api.init_db import init_db
+from apps.api.init_db import init_db, seed_tenant_bootstrap
 from apps.api.main import app
 from apps.api.settings import settings
 from apps.engine.ask import AskEngine
 from apps.engine.llm import FakeLLM
 from apps.packs.models import Example, IndustryPack, Metric, Recommended, Term
+from tests.api_helpers import workspace_headers
 
 
 @pytest.fixture
@@ -19,7 +20,9 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "database_url", f"sqlite:///{db_path}")
     monkeypatch.setattr(settings, "packs_root", str(tmp_path / "empty_packs"))
     db.reset_engine()
-    init_db(db.get_engine())
+    eng = db.get_engine()
+    init_db(eng)
+    seed_tenant_bootstrap(eng, default_database_url="sqlite://")
     with TestClient(app) as c:
         yield c
     db.reset_engine()
@@ -39,12 +42,6 @@ def _biz_pack() -> IndustryPack:
     )
 
 
-def _token(client: TestClient) -> str:
-    r = client.post("/auth/login", json={"username": "demo", "password": "demo123"})
-    assert r.status_code == 200
-    return r.json()["access_token"]
-
-
 def test_ask_rejects_multi_statement_injection(client: TestClient, tmp_path, monkeypatch):
     eng = create_engine(f"sqlite:///{tmp_path / 'inj.db'}")
     with eng.begin() as c:
@@ -53,11 +50,17 @@ def test_ask_rejects_multi_statement_injection(client: TestClient, tmp_path, mon
 
     llm = FakeLLM(sql="SELECT 1; DROP TABLE users", narrative="should not run")
     ask_engine = AskEngine(warehouse=eng, llm=llm, packs_by_domain={"biz": _biz_pack()})
-    monkeypatch.setattr("apps.api.deps.get_ask_engine", lambda _session=None: ask_engine)
+    monkeypatch.setattr(
+        "apps.api.deps.get_ask_engine", lambda *_a, **_k: ask_engine
+    )
+    monkeypatch.setattr(
+        "apps.api.main.build_engine_from_datasource",
+        lambda _ds: create_engine("sqlite://"),
+    )
 
     r = client.post(
         "/ask",
-        headers={"Authorization": f"Bearer {_token(client)}"},
+        headers=workspace_headers(client),
         json={"domain": "biz", "question": "2026年各月ARPU是多少"},
     )
     assert r.status_code == 200
@@ -73,11 +76,17 @@ def test_ask_rejects_delete(client: TestClient, tmp_path, monkeypatch):
 
     llm = FakeLLM(sql="DELETE FROM users", narrative="x")
     ask_engine = AskEngine(warehouse=eng, llm=llm, packs_by_domain={"biz": _biz_pack()})
-    monkeypatch.setattr("apps.api.deps.get_ask_engine", lambda _session=None: ask_engine)
+    monkeypatch.setattr(
+        "apps.api.deps.get_ask_engine", lambda *_a, **_k: ask_engine
+    )
+    monkeypatch.setattr(
+        "apps.api.main.build_engine_from_datasource",
+        lambda _ds: create_engine("sqlite://"),
+    )
 
     r = client.post(
         "/ask",
-        headers={"Authorization": f"Bearer {_token(client)}"},
+        headers=workspace_headers(client),
         json={"domain": "biz", "question": "2026年各月ARPU是多少"},
     )
     assert r.status_code == 200

@@ -253,10 +253,17 @@ def ask_in_session(
         )
 
     dialect = dialect_for_datasource(ds)
-    extra_terms = deps.load_domain_terms(session, chat.domain)
-    extra_examples = deps.load_domain_examples(session, chat.domain)
+    extra_terms = deps.load_domain_terms(session, chat.domain, workspace.id)  # type: ignore[arg-type]
+    extra_examples = deps.load_domain_examples(
+        session, chat.domain, workspace.id  # type: ignore[arg-type]
+    )
     try:
-        engine = deps.get_ask_engine(session, warehouse=warehouse, dialect=dialect)
+        engine = deps.get_ask_engine(
+            session,
+            warehouse=warehouse,
+            dialect=dialect,
+            workspace_id=workspace.id,  # type: ignore[arg-type]
+        )
         resp = engine.ask(
             AskRequest(domain=chat.domain, question=body.question),
             extra_terms=extra_terms,

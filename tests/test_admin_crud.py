@@ -5,7 +5,7 @@ from apps.api import db
 from apps.api.init_db import init_db, seed_tenant_bootstrap
 from apps.api.main import app
 from apps.api.settings import settings
-from tests.api_helpers import workspace_headers
+from tests.api_helpers import login_headers, workspace_headers
 
 
 @pytest.fixture
@@ -144,3 +144,45 @@ def test_terms_and_examples_crud_with_domain_filter(client: TestClient):
 
     assert client.delete(f"/admin/terms/{term['id']}", headers=headers).status_code == 200
     assert client.delete(f"/admin/examples/{example['id']}", headers=headers).status_code == 200
+
+
+def test_viewer_cannot_create_model(client: TestClient):
+    admin = workspace_headers(client)
+    me = client.get("/auth/me", headers=admin)
+    assert me.status_code == 200
+    ws_id = me.json()["workspaces"][0]["id"]
+
+    r = client.post(
+        "/admin/users",
+        headers=admin,
+        json={
+            "username": "viewer_admin",
+            "password": "viewer123",
+            "display_name": "Viewer",
+            "org_role": "viewer",
+        },
+    )
+    assert r.status_code == 200
+    uid = r.json()["id"]
+
+    m = client.post(
+        f"/workspaces/{ws_id}/members",
+        headers=admin,
+        json={"user_id": uid, "role": "viewer", "domains": ["biz", "network", "cs"]},
+    )
+    assert m.status_code == 200
+
+    auth = login_headers(client, username="viewer_admin", password="viewer123")
+    headers = workspace_headers(client, auth)
+    created = client.post(
+        "/admin/models",
+        headers=headers,
+        json={
+            "name": "blocked",
+            "base_url": "https://api.example.com/v1",
+            "api_key": "",
+            "model": "gpt-test",
+            "enabled": False,
+        },
+    )
+    assert created.status_code == 403

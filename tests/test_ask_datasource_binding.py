@@ -83,7 +83,7 @@ def test_ask_uses_default_datasource(client: TestClient, monkeypatch):
     assert recorded == [default_id]
 
 
-def test_viewer_cannot_ask(client: TestClient):
+def _create_viewer(client: TestClient) -> dict[str, str]:
     admin = workspace_headers(client)
     me = client.get("/auth/me", headers=admin)
     assert me.status_code == 200
@@ -109,6 +109,12 @@ def test_viewer_cannot_ask(client: TestClient):
     )
     assert m.status_code == 200
 
+    auth = login_headers(client, username="viewer1", password="viewer123")
+    return workspace_headers(client, auth)
+
+
+def test_viewer_cannot_ask(client: TestClient):
+    admin = workspace_headers(client)
     created = client.post(
         "/sessions",
         headers=admin,
@@ -117,12 +123,21 @@ def test_viewer_cannot_ask(client: TestClient):
     assert created.status_code == 200
     sid = created.json()["id"]
 
-    auth = login_headers(client, username="viewer1", password="viewer123")
-    headers = workspace_headers(client, auth)
+    headers = _create_viewer(client)
     ask = client.post(
         f"/sessions/{sid}/ask",
         headers=headers,
         json={"question": "should fail"},
+    )
+    assert ask.status_code == 403
+
+
+def test_viewer_cannot_legacy_ask(client: TestClient):
+    headers = _create_viewer(client)
+    ask = client.post(
+        "/ask",
+        headers=headers,
+        json={"domain": "biz", "question": "should fail"},
     )
     assert ask.status_code == 403
 

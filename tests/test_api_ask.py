@@ -9,6 +9,7 @@ from apps.api.settings import settings
 from apps.engine.ask import AskEngine
 from apps.engine.llm import FakeLLM
 from apps.packs.models import Example, IndustryPack, Metric, Recommended, Term
+from tests.api_helpers import workspace_headers
 
 
 @pytest.fixture
@@ -58,15 +59,18 @@ def test_ask_with_fake_engine(client: TestClient, tmp_path, monkeypatch):
     llm = FakeLLM(sql="SELECT month, arpu FROM users ORDER BY month", narrative="ARPU 呈上升趋势。")
     ask_engine = AskEngine(warehouse=eng, llm=llm, packs_by_domain={"biz": _biz_pack()})
 
-    monkeypatch.setattr("apps.api.deps.get_ask_engine", lambda _session=None: ask_engine)
+    monkeypatch.setattr(
+        "apps.api.deps.get_ask_engine", lambda *_a, **_k: ask_engine
+    )
+    monkeypatch.setattr(
+        "apps.api.main.build_engine_from_datasource",
+        lambda _ds: create_engine("sqlite://"),
+    )
 
-    r = client.post("/auth/login", json={"username": "demo", "password": "demo123"})
-    assert r.status_code == 200
-    token = r.json()["access_token"]
-
+    headers = workspace_headers(client)
     r2 = client.post(
         "/ask",
-        headers={"Authorization": f"Bearer {token}"},
+        headers=headers,
         json={"domain": "biz", "question": "2026年各月ARPU是多少"},
     )
     assert r2.status_code == 200

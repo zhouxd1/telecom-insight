@@ -86,6 +86,17 @@ def _require_domain_write(access: EffectiveAccess, domain: str) -> None:
         )
 
 
+def _require_model_write(access: EffectiveAccess) -> None:
+    """Viewers cannot manage models; org_admin and analysts may write."""
+    if access.role == "viewer" or (
+        not access.can_ask and access.role != "org_admin"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="write not allowed",
+        )
+
+
 # --- Models ---
 
 
@@ -108,7 +119,8 @@ def create_model(
     session: Session = Depends(get_session),
     ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    workspace, _access = ws_access
+    workspace, access = ws_access
+    _require_model_write(access)
     if body.enabled:
         _disable_other_models(session, workspace.id)  # type: ignore[arg-type]
     row = TiAiModel(
@@ -142,7 +154,8 @@ def update_model(
     session: Session = Depends(get_session),
     ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    workspace, _access = ws_access
+    workspace, access = ws_access
+    _require_model_write(access)
     row = _get_workspace_model(session, model_id, workspace)
     data = body.model_dump(exclude_unset=True)
     if data.get("enabled") is True:
@@ -162,7 +175,8 @@ def delete_model(
     session: Session = Depends(get_session),
     ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    workspace, _access = ws_access
+    workspace, access = ws_access
+    _require_model_write(access)
     row = _get_workspace_model(session, model_id, workspace)
     session.delete(row)
     session.commit()
@@ -270,8 +284,9 @@ def delete_term(
     session: Session = Depends(get_session),
     ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    workspace, _access = ws_access
+    workspace, access = ws_access
     row = _get_workspace_term(session, term_id, workspace)
+    _require_domain_write(access, row.domain)
     session.delete(row)
     session.commit()
     return {"ok": True}
@@ -353,8 +368,9 @@ def delete_example(
     session: Session = Depends(get_session),
     ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    workspace, _access = ws_access
+    workspace, access = ws_access
     row = _get_workspace_example(session, example_id, workspace)
+    _require_domain_write(access, row.domain)
     session.delete(row)
     session.commit()
     return {"ok": True}

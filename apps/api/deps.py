@@ -187,15 +187,27 @@ def get_packs() -> dict[str, IndustryPack]:
     return _load_packs(Path(settings.packs_root))
 
 
-def load_domain_terms(session: Session, domain: str) -> list[Term]:
-    rows = session.exec(select(TiTerm).where(TiTerm.domain == domain)).all()
+def load_domain_terms(session: Session, domain: str, workspace_id: int) -> list[Term]:
+    rows = session.exec(
+        select(TiTerm).where(
+            TiTerm.domain == domain,
+            TiTerm.workspace_id == workspace_id,
+        )
+    ).all()
     return [
         Term(term=r.term, standard=r.standard, maps_to=r.maps_to) for r in rows
     ]
 
 
-def load_domain_examples(session: Session, domain: str) -> list[Example]:
-    rows = session.exec(select(TiSqlExample).where(TiSqlExample.domain == domain)).all()
+def load_domain_examples(
+    session: Session, domain: str, workspace_id: int
+) -> list[Example]:
+    rows = session.exec(
+        select(TiSqlExample).where(
+            TiSqlExample.domain == domain,
+            TiSqlExample.workspace_id == workspace_id,
+        )
+    ).all()
     return [Example(question=r.question, sql=r.sql) for r in rows]
 
 
@@ -223,10 +235,19 @@ def dialect_for_datasource(ds: TiDatasource) -> str:
     return resolve_sqlglot_dialect(family)
 
 
-def resolve_llm(session: Session | None, packs: dict[str, IndustryPack]):
+def resolve_llm(
+    session: Session | None,
+    packs: dict[str, IndustryPack],
+    workspace_id: int | None = None,
+):
     """Prefer enabled TiAiModel with api_key; else DemoFakeLLM (or settings key)."""
-    if session is not None:
-        model = session.exec(select(TiAiModel).where(TiAiModel.enabled.is_(True))).first()
+    if session is not None and workspace_id is not None:
+        model = session.exec(
+            select(TiAiModel).where(
+                TiAiModel.workspace_id == workspace_id,
+                TiAiModel.enabled.is_(True),
+            )
+        ).first()
         if model is not None and model.api_key:
             return OpenAICompatibleLLM(
                 model=model.model or settings.llm_model,
@@ -247,10 +268,11 @@ def get_ask_engine(
     *,
     warehouse: Engine | None = None,
     dialect: str = "postgres",
+    workspace_id: int | None = None,
 ) -> AskEngine:
     packs = get_packs()
     eng = warehouse if warehouse is not None else create_engine(settings.database_url)
-    llm = resolve_llm(session, packs)
+    llm = resolve_llm(session, packs, workspace_id=workspace_id)
     return AskEngine(
         warehouse=eng,
         llm=llm,

@@ -3,13 +3,20 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 from sqlmodel import Session
 
 from apps.api import deps
+from apps.api.acl import EffectiveAccess
 from apps.api.db import get_engine, get_session
-from apps.api.deps import get_current_user
+from apps.api.deps import (
+    dialect_for_datasource,
+    get_current_user,
+    require_workspace,
+    resolve_datasource,
+)
 from apps.api.init_db import init_db, seed_pack_catalog, seed_tenant_bootstrap
-from apps.api.models_db import TiUser
+from apps.api.models_db import TiUser, TiWorkspace
 from apps.api.routes_admin import router as admin_router
 from apps.api.routes_auth import router as auth_router
 from apps.api.routes_datasources import router as datasources_router
@@ -23,6 +30,7 @@ from apps.api.schemas import (
 )
 from apps.api.settings import settings
 from apps.engine.ask import AskRequest
+from apps.engine.connectors import build_engine_from_datasource
 
 
 @asynccontextmanager
@@ -78,16 +86,72 @@ def list_recommended(domain_id: str, _user: TiUser = Depends(get_current_user)):
 def ask(
     body: AskBody,
     session: Session = Depends(get_session),
-    _user: TiUser = Depends(get_current_user),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    extra_terms = deps.load_domain_terms(session, body.domain)
-    extra_examples = deps.load_domain_examples(session, body.domain)
-    engine = deps.get_ask_engine(session)
-    resp = engine.ask(
-        AskRequest(domain=body.domain, question=body.question),
-        extra_terms=extra_terms,
-        extra_examples=extra_examples,
+    workspace, access = ws_access
+    if not access.can_ask:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="viewer cannot ask",
+        )
+    if body.domain not in access.domains:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="domain not allowed",
+        )
+
+    ds = resolve_datasource(session, workspace.id)  # type: ignore[arg-type]
+    if ds is None:
+        return AskApiResponse(
+            status="error",
+            message="未配置可用数据源，请先在数据源管理中设置默认数据源。",
+            sql=None,
+            rows=[],
+            truncated=False,
+            chart=None,
+            narrative=None,
+            steps=[],
+        )
+
+    warehouse = None
+    try:
+        warehouse = build_engine_from_datasource(ds)
+        with warehouse.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception:
+        if warehouse is not None:
+            warehouse.dispose()
+        return AskApiResponse(
+            status="error",
+            message="数据源连接失败，请检查数据源配置后重试。",
+            sql=None,
+            rows=[],
+            truncated=False,
+            chart=None,
+            narrative=None,
+            steps=[],
+        )
+
+    dialect = dialect_for_datasource(ds)
+    extra_terms = deps.load_domain_terms(session, body.domain, workspace.id)  # type: ignore[arg-type]
+    extra_examples = deps.load_domain_examples(
+        session, body.domain, workspace.id  # type: ignore[arg-type]
     )
+    try:
+        engine = deps.get_ask_engine(
+            session,
+            warehouse=warehouse,
+            dialect=dialect,
+            workspace_id=workspace.id,  # type: ignore[arg-type]
+        )
+        resp = engine.ask(
+            AskRequest(domain=body.domain, question=body.question),
+            extra_terms=extra_terms,
+            extra_examples=extra_examples,
+        )
+    finally:
+        warehouse.dispose()
+
     return AskApiResponse(
         status=resp.status,
         message=resp.message,
