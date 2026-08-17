@@ -328,3 +328,40 @@ class BrandingUpdate(BaseModel):
     surface: str | None = None
     text: str | None = None
     muted: str | None = None
+
+
+# --- RLS ---
+
+
+class RlsPolicyOut(BaseModel):
+    id: int
+    workspace_id: int
+    member_id: int
+    domain: str
+    schema_name: str
+    table_name: str
+    column_name: str
+    op: str
+    values: list[str]
+
+
+class RlsPolicyCreate(BaseModel):
+    domain: str
+    schema_name: str
+    table_name: str
+    column_name: str
+    op: str
+    values: list[str]
+
+
+class RlsPolicyUpdate(BaseModel):
+    op: str | None = None
+    values: list[str] | None = None
+
+
+class RlsSettingsOut(BaseModel):
+    rls_admin_bypass: bool
+
+
+class RlsSettingsUpdate(BaseModel):
+    rls_admin_bypass: bool

@@ -46,19 +46,25 @@ def client_admin(client_with_seed: TestClient):
 
 @pytest.fixture
 def analyst_user_id(client_admin: TestClient) -> int:
-    r = client_admin.post(
-        "/admin/users",
-        json={
-            "username": "analyst1",
-            "password": "analyst123",
-            "display_name": "Analyst",
-            "org_role": "analyst",
-        },
-    )
-    assert r.status_code == 200
-    body = r.json()
-    assert "password_hash" not in body
-    uid = body["id"]
+    users = client_admin.get("/admin/users")
+    assert users.status_code == 200
+    existing = next((u for u in users.json() if u["username"] == "analyst1"), None)
+    if existing is not None:
+        uid = existing["id"]
+    else:
+        r = client_admin.post(
+            "/admin/users",
+            json={
+                "username": "analyst1",
+                "password": "analyst123",
+                "display_name": "Analyst",
+                "org_role": "analyst",
+            },
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert "password_hash" not in body
+        uid = body["id"]
 
     # Add to default workspace so analyst can use workspace-scoped APIs.
     me = client_admin.get("/auth/me")
@@ -72,7 +78,8 @@ def analyst_user_id(client_admin: TestClient) -> int:
             "domains": ["biz", "network", "cs"],
         },
     )
-    assert m.status_code == 200
+    # Seed may already have membership for analyst1.
+    assert m.status_code in (200, 409)
     return uid
 
 
