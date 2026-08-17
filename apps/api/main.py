@@ -17,6 +17,7 @@ from apps.api.deps import (
 )
 from apps.api.init_db import init_db, seed_pack_catalog, seed_tenant_bootstrap
 from apps.api.models_db import TiUser, TiWorkspace
+from apps.api.rls_load import get_workspace_member, load_rls_predicates
 from apps.api.routes_admin import router as admin_router
 from apps.api.routes_auth import router as auth_router
 from apps.api.routes_branding import router as branding_router
@@ -90,6 +91,7 @@ def list_recommended(domain_id: str, _user: TiUser = Depends(get_current_user)):
 def ask(
     body: AskBody,
     session: Session = Depends(get_session),
+    user: TiUser = Depends(get_current_user),
     ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
     workspace, access = ws_access
@@ -136,6 +138,9 @@ def ask(
             steps=[],
         )
 
+    member = get_workspace_member(session, workspace.id, user.id)  # type: ignore[arg-type]
+    rls_predicates = load_rls_predicates(session, user, workspace, member)
+
     dialect = dialect_for_datasource(ds)
     extra_terms = deps.load_domain_terms(session, body.domain, workspace.id)  # type: ignore[arg-type]
     extra_examples = deps.load_domain_examples(
@@ -152,6 +157,7 @@ def ask(
             AskRequest(domain=body.domain, question=body.question),
             extra_terms=extra_terms,
             extra_examples=extra_examples,
+            rls_predicates=rls_predicates,
         )
     finally:
         warehouse.dispose()

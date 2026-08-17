@@ -8,8 +8,19 @@ from sqlmodel import Session, select
 from apps.api import deps
 from apps.api.acl import EffectiveAccess
 from apps.api.db import get_session
-from apps.api.deps import dialect_for_datasource, require_workspace, resolve_datasource
-from apps.api.models_db import TiChatMessage, TiChatSession, TiWorkspace
+from apps.api.deps import (
+    dialect_for_datasource,
+    get_current_user,
+    require_workspace,
+    resolve_datasource,
+)
+from apps.api.models_db import (
+    TiChatMessage,
+    TiChatSession,
+    TiUser,
+    TiWorkspace,
+)
+from apps.api.rls_load import get_workspace_member, load_rls_predicates
 from apps.api.schemas import (
     AskApiResponse,
     MessageOut,
@@ -203,6 +214,7 @@ def ask_in_session(
     session_id: int,
     body: SessionAskBody,
     session: Session = Depends(get_session),
+    user: TiUser = Depends(get_current_user),
     ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
     workspace, access = ws_access
@@ -257,6 +269,8 @@ def ask_in_session(
     extra_examples = deps.load_domain_examples(
         session, chat.domain, workspace.id  # type: ignore[arg-type]
     )
+    member = get_workspace_member(session, workspace.id, user.id)  # type: ignore[arg-type]
+    rls_predicates = load_rls_predicates(session, user, workspace, member)
     try:
         engine = deps.get_ask_engine(
             session,
@@ -268,6 +282,7 @@ def ask_in_session(
             AskRequest(domain=chat.domain, question=body.question),
             extra_terms=extra_terms,
             extra_examples=extra_examples,
+            rls_predicates=rls_predicates,
         )
     finally:
         warehouse.dispose()
