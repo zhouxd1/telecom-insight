@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -23,6 +24,10 @@ _COLOR_MODES = frozenset({"light", "dark", "system"})
 
 _DEFAULT_PRODUCT_NAME = "元景.智数"
 _DEFAULT_TAGLINE = "运营商智能问数"
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def _media_src(org_id: int | None, relative_path: str | None, fallback_url: str | None, default: str) -> str:
@@ -158,6 +163,7 @@ def update_my_branding(
     data = body.model_dump(exclude_unset=True)
     for key, value in data.items():
         setattr(row, key, value)
+    row.updated_at = _utcnow()
     session.add(row)
     session.commit()
     session.refresh(row)
