@@ -19,6 +19,7 @@ from apps.api.init_db import init_db, seed_pack_catalog, seed_tenant_bootstrap
 from apps.api.models_db import TiUser, TiWorkspace
 from apps.api.routes_admin import router as admin_router
 from apps.api.routes_auth import router as auth_router
+from apps.api.routes_branding import router as branding_router
 from apps.api.routes_datasources import router as datasources_router
 from apps.api.routes_sessions import router as sessions_router
 from apps.api.routes_users import router as users_router
@@ -58,6 +59,7 @@ app.include_router(users_router)
 app.include_router(admin_router)
 app.include_router(datasources_router)
 app.include_router(sessions_router)
+app.include_router(branding_router)
 
 
 @app.get("/health")
