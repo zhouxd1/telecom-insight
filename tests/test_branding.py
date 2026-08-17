@@ -34,3 +34,30 @@ def test_analyst_cannot_put_branding(client_with_seed, analyst_headers):
         json={"product_name": "X"},
     )
     assert r.status_code == 403
+
+
+def test_put_rejects_null_required_fields(authenticated_client):
+    r = authenticated_client.put(
+        "/orgs/me/branding",
+        json={"product_name": None},
+    )
+    assert r.status_code == 400
+
+
+def test_put_clears_color_override_with_null(authenticated_client):
+    set_r = authenticated_client.put(
+        "/orgs/me/branding",
+        json={"preset_id": "default", "primary": "#0066aa"},
+    )
+    assert set_r.status_code == 200
+    assert set_r.json()["colors"]["primary"] == "#0066aa"
+    assert set_r.json()["primary"] == "#0066aa"
+
+    clear_r = authenticated_client.put(
+        "/orgs/me/branding",
+        json={"primary": None},
+    )
+    assert clear_r.status_code == 200
+    assert clear_r.json()["primary"] is None
+    assert clear_r.json()["colors"]["primary"].startswith("#")
+    assert clear_r.json()["colors"]["primary"] != "#0066aa"

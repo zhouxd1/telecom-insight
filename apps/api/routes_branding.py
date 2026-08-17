@@ -109,6 +109,12 @@ def _get_or_create_branding(session: Session, org_id: int) -> TiOrgBranding:
 
 def _validate_update(body: BrandingUpdate) -> None:
     data = body.model_dump(exclude_unset=True)
+    for key in ("product_name", "tagline", "preset_id", "color_mode"):
+        if key in data and data[key] is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"{key} cannot be null",
+            )
     if "preset_id" in data and data["preset_id"] is not None:
         if data["preset_id"] not in PRESETS:
             raise HTTPException(
