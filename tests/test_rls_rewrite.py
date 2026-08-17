@@ -45,3 +45,49 @@ def test_no_matching_table_unchanged():
 def test_prompt_mentions_policy():
     text = format_rls_prompt([RlsPredicate("biz", "sub_month", "region", "in", ["华东"])])
     assert "region" in text and "华东" in text
+
+
+def test_apply_rls_unqualified_table():
+    """FROM sub_month (no schema) must still match policy on biz.sub_month."""
+    preds = [RlsPredicate("biz", "sub_month", "region", "in", ["华东"])]
+    out = apply_rls(
+        "SELECT region, SUM(sub_cnt) AS sub_cnt FROM sub_month GROUP BY region",
+        preds,
+        dialect="postgres",
+    )
+    assert "华东" in out
+    assert "region" in out.lower()
+
+
+def test_merge_cross_column_and():
+    preds = [
+        RlsPredicate("biz", "sub_month", "region", "in", ["华东"]),
+        RlsPredicate("biz", "sub_month", "channel", "eq", ["营业厅"]),
+    ]
+    merged = merge_predicates(preds)
+    sql_frag = merged[("biz", "sub_month")]
+    assert "region" in sql_frag.lower()
+    assert "华东" in sql_frag
+    assert "channel" in sql_frag.lower()
+    assert "营业厅" in sql_frag
+    assert " AND " in sql_frag
+
+
+def test_apply_rls_unsupported_op_raises():
+    preds = [RlsPredicate("biz", "sub_month", "region", "like", ["华东%"])]
+    with pytest.raises(SqlGuardError):
+        apply_rls(
+            "SELECT region FROM biz.sub_month",
+            preds,
+            dialect="postgres",
+        )
+
+
+def test_apply_rls_union_with_policies_raises():
+    preds = [RlsPredicate("biz", "sub_month", "region", "in", ["华东"])]
+    with pytest.raises(SqlGuardError):
+        apply_rls(
+            "SELECT region FROM biz.sub_month UNION SELECT region FROM biz.sub_month",
+            preds,
+            dialect="postgres",
+        )

@@ -69,11 +69,20 @@ def apply_rls(sql: str, preds: list[RlsPredicate], *, dialect: str = "postgres")
         name = t.name.lower()
         used_tables.append((schema, name))
 
+    # Unqualified FROM t: match by table_name alone; reject if multiple schemas collide.
+    unqualified_names = {u_tbl for u_sch, u_tbl in used_tables if not u_sch}
+    for name in unqualified_names:
+        schemas = {sch for sch, tbl in merged if tbl == name}
+        if len(schemas) > 1:
+            raise SqlGuardError(
+                f"ambiguous unqualified table {name}: multiple schema policies {sorted(schemas)}"
+            )
+
     needed = []
     for key, frag in merged.items():
         sch, tbl = key
         if any(
-            (u_sch == sch or not sch) and u_tbl == tbl
+            u_tbl == tbl and (u_sch == sch if u_sch else True)
             for u_sch, u_tbl in used_tables
         ):
             needed.append(frag)
