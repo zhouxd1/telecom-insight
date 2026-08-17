@@ -1,7 +1,25 @@
 import axios, { AxiosError } from "axios";
+import type { Branding } from "./branding";
 
 const TOKEN_KEY = "ti_token";
 const WORKSPACE_KEY = "ti_workspace_id";
+
+export type { Branding };
+
+export type BrandingUpdatePayload = Partial<{
+  product_name: string;
+  tagline: string;
+  logo_url: string | null;
+  favicon_url: string | null;
+  preset_id: string;
+  color_mode: string;
+  primary: string | null;
+  primary_soft: string | null;
+  bg: string | null;
+  surface: string | null;
+  text: string | null;
+  muted: string | null;
+}>;
 
 export type DomainInfo = {
   id: string;
@@ -508,4 +526,55 @@ export async function updateExample(
 
 export async function deleteExample(id: number): Promise<void> {
   await client.delete(`/admin/examples/${id}`);
+}
+
+function asBranding(data: Branding): Branding {
+  return {
+    product_name: data.product_name,
+    tagline: data.tagline,
+    logo_src: data.logo_src,
+    favicon_src: data.favicon_src,
+    preset_id: data.preset_id,
+    color_mode: data.color_mode,
+    colors: data.colors ?? {},
+  };
+}
+
+export async function fetchDefaultBranding(): Promise<Branding> {
+  const { data } = await client.get<Branding>("/branding/default");
+  return asBranding(data);
+}
+
+export async function fetchOrgBranding(): Promise<Branding> {
+  const { data } = await client.get<Branding>("/orgs/me/branding");
+  return asBranding(data);
+}
+
+export async function updateOrgBranding(body: BrandingUpdatePayload): Promise<Branding> {
+  const { data } = await client.put<Branding>("/orgs/me/branding", body);
+  return asBranding(data);
+}
+
+export async function uploadBrandingLogo(file: File): Promise<Branding> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await client.post<Branding>("/orgs/me/branding/logo", form);
+  return asBranding(data);
+}
+
+export async function uploadBrandingFavicon(file: File): Promise<Branding> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await client.post<Branding>("/orgs/me/branding/favicon", form);
+  return asBranding(data);
+}
+
+export async function deleteBrandingLogo(): Promise<Branding> {
+  const { data } = await client.delete<Branding>("/orgs/me/branding/logo");
+  return asBranding(data);
+}
+
+export async function deleteBrandingFavicon(): Promise<Branding> {
+  const { data } = await client.delete<Branding>("/orgs/me/branding/favicon");
+  return asBranding(data);
 }

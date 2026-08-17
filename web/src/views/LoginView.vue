@@ -3,10 +3,10 @@
     <section class="login-card">
       <div class="hero-brand">
         <div class="logo-block">
-          <img src="/logo.svg" alt="元景.智数" class="hero-logo" />
+          <img :src="logoSrc" :alt="productName" class="hero-logo" />
         </div>
-        <h1>元景.智数</h1>
-        <p>运营商智能问数</p>
+        <h1>{{ productName }}</h1>
+        <p>{{ tagline }}</p>
       </div>
 
       <form class="login-form" @submit.prevent="onSubmit">
@@ -37,15 +37,39 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { friendlyError, login } from "../api";
+import { fetchDefaultBranding, friendlyError, login } from "../api";
+import {
+  applyBranding,
+  DEFAULT_BRANDING,
+  resolveMediaUrl,
+  type Branding,
+} from "../branding";
 
 const router = useRouter();
 const username = ref("demo");
 const password = ref("demo123");
 const loading = ref(false);
 const error = ref("");
+const branding = ref<Branding>({ ...DEFAULT_BRANDING });
+
+const productName = computed(() => branding.value.product_name || DEFAULT_BRANDING.product_name);
+const tagline = computed(() => branding.value.tagline || DEFAULT_BRANDING.tagline);
+const logoSrc = computed(() =>
+  resolveMediaUrl(branding.value.logo_src || DEFAULT_BRANDING.logo_src),
+);
+
+async function loadBranding() {
+  try {
+    const data = await fetchDefaultBranding();
+    branding.value = data;
+    applyBranding(data);
+  } catch {
+    branding.value = { ...DEFAULT_BRANDING };
+    applyBranding(DEFAULT_BRANDING);
+  }
+}
 
 async function onSubmit() {
   error.value = "";
@@ -59,6 +83,10 @@ async function onSubmit() {
     loading.value = false;
   }
 }
+
+onMounted(() => {
+  void loadBranding();
+});
 </script>
 
 <style scoped>

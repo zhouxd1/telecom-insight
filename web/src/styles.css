@@ -31,6 +31,24 @@
   --paper: var(--bg);
 }
 
+/* Baseline dark tokens (match apps/api/branding_presets.py default dark).
+   applyBranding may override individual vars after setting data-theme. */
+[data-theme="dark"] {
+  --bg: #0f1419;
+  --surface: #1a1f26;
+  --surface-muted: #242a33;
+  --ink: #e5e7eb;
+  --text: #e5e7eb;
+  --muted: #9ca3af;
+  --line: #2d333b;
+  --line-strong: #3d4450;
+  --accent: #2dd4bf;
+  --accent-soft: #134e4a;
+  --accent-ink: #2dd4bf;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.24), 0 4px 12px rgba(0, 0, 0, 0.28);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
+}
+
 *,
 *::before,
 *::after {

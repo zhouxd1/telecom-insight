@@ -2,10 +2,10 @@
   <div class="shell">
     <header class="topbar">
       <div class="brand">
-        <img src="/logo.svg" alt="元景.智数" class="logo" />
+        <img :src="logoSrc" :alt="productName" class="logo" />
         <div class="brand-text">
-          <strong>元景.智数</strong>
-          <span>{{ me?.org_name || "运营商智能问数" }}</span>
+          <strong>{{ productName }}</strong>
+          <span>{{ me?.org_name || branding?.tagline || DEFAULT_BRANDING.tagline }}</span>
         </div>
         <span v-if="me" class="role-badge" :title="roleLabel">{{ me.org_role }}</span>
       </div>
@@ -56,14 +56,22 @@ import { RouterLink, RouterView, useRouter } from "vue-router";
 import {
   clearToken,
   fetchMe,
+  fetchOrgBranding,
   getWorkspaceId,
   setWorkspaceId as persistWorkspaceId,
   type MeResponse,
 } from "../api";
+import {
+  applyBranding,
+  DEFAULT_BRANDING,
+  resolvePublicAssetUrl,
+  type Branding,
+} from "../branding";
 
 const router = useRouter();
 
 const me = ref<MeResponse | null>(null);
+const branding = ref<Branding | null>(null);
 const workspaceId = ref<number | null>(getWorkspaceId());
 
 const meRef = me as Ref<MeResponse | null>;
@@ -71,6 +79,13 @@ provide("me", meRef);
 provide("workspaceId", workspaceId);
 
 const workspaces = computed(() => me.value?.workspaces ?? []);
+
+const productName = computed(
+  () => branding.value?.product_name || DEFAULT_BRANDING.product_name,
+);
+const logoSrc = computed(() =>
+  resolvePublicAssetUrl(branding.value?.logo_src || DEFAULT_BRANDING.logo_src),
+);
 
 const roleLabel = computed(() => {
   const role = me.value?.org_role;
@@ -106,6 +121,17 @@ async function loadMe() {
   }
 }
 
+async function loadBranding() {
+  try {
+    const b = await fetchOrgBranding();
+    branding.value = b;
+    applyBranding(b);
+  } catch {
+    branding.value = { ...DEFAULT_BRANDING };
+    applyBranding(DEFAULT_BRANDING);
+  }
+}
+
 function onWorkspaceChange(event: Event) {
   const select = event.target as HTMLSelectElement;
   const id = Number(select.value);
@@ -121,7 +147,7 @@ function logout() {
 }
 
 onMounted(() => {
-  void loadMe();
+  void Promise.all([loadMe(), loadBranding()]);
 });
 </script>
 
