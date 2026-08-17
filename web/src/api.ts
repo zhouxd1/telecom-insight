@@ -584,3 +584,88 @@ export async function deleteBrandingFavicon(): Promise<Branding> {
   const { data } = await client.delete<Branding>("/orgs/me/branding/favicon");
   return asBranding(data);
 }
+
+export type RlsPolicy = {
+  id: number;
+  workspace_id: number;
+  member_id: number;
+  domain: string;
+  schema_name: string;
+  table_name: string;
+  column_name: string;
+  op: string;
+  values: string[];
+};
+
+export type RlsColumn = {
+  schema_name: string;
+  table_name: string;
+  column_name: string;
+  label: string;
+};
+
+export type RlsSettings = {
+  rls_admin_bypass: boolean;
+};
+
+export async function listMemberRls(
+  workspaceId: number,
+  memberId: number,
+): Promise<RlsPolicy[]> {
+  const { data } = await client.get<RlsPolicy[]>(
+    `/workspaces/${workspaceId}/members/${memberId}/rls`,
+  );
+  return data;
+}
+
+export async function createMemberRls(
+  workspaceId: number,
+  memberId: number,
+  body: {
+    domain: string;
+    schema_name: string;
+    table_name: string;
+    column_name: string;
+    op: string;
+    values: string[];
+  },
+): Promise<RlsPolicy> {
+  const { data } = await client.post<RlsPolicy>(
+    `/workspaces/${workspaceId}/members/${memberId}/rls`,
+    body,
+  );
+  return data;
+}
+
+export async function updateRlsPolicy(
+  workspaceId: number,
+  policyId: number,
+  body: Partial<{ op: string; values: string[] }>,
+): Promise<RlsPolicy> {
+  const { data } = await client.put<RlsPolicy>(
+    `/workspaces/${workspaceId}/rls/${policyId}`,
+    body,
+  );
+  return data;
+}
+
+export async function deleteRlsPolicy(workspaceId: number, policyId: number): Promise<void> {
+  await client.delete(`/workspaces/${workspaceId}/rls/${policyId}`);
+}
+
+export async function fetchRlsSettings(): Promise<RlsSettings> {
+  const { data } = await client.get<RlsSettings>("/orgs/me/rls-settings");
+  return data;
+}
+
+export async function updateRlsSettings(body: {
+  rls_admin_bypass: boolean;
+}): Promise<RlsSettings> {
+  const { data } = await client.patch<RlsSettings>("/orgs/me/rls-settings", body);
+  return data;
+}
+
+export async function fetchRlsColumns(domainId: string): Promise<RlsColumn[]> {
+  const { data } = await client.get<RlsColumn[]>(`/domains/${domainId}/rls-columns`);
+  return data;
+}
