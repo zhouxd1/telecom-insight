@@ -4,6 +4,7 @@ from sqlmodel import Session, SQLModel, create_engine, select, func
 from apps.api.init_db import init_db, seed_tenant_bootstrap
 from apps.api.models_db import (
     TiOrg,
+    TiOrgBranding,
     TiUser,
     TiWorkspace,
     TiWorkspaceMember,
@@ -30,6 +31,13 @@ def test_seed_creates_org_workspace_demo_and_default_ds(tmp_path, monkeypatch):
         ds = s.exec(select(TiDatasource).where(TiDatasource.is_default == True)).first()  # noqa: E712
         assert ds is not None and ds.workspace_id == ws.id
         assert ds.password_enc == ""
+        org = s.exec(select(TiOrg)).first()
+        branding = s.get(TiOrgBranding, org.id)
+        assert branding is not None
+        assert branding.product_name == "元景.智数"
+        assert branding.tagline == "运营商智能问数"
+        assert branding.preset_id == "default"
+        assert branding.color_mode == "light"
 
 
 def test_seed_tenant_bootstrap_is_idempotent_and_backfills_workspace_id():
@@ -41,6 +49,12 @@ def test_seed_tenant_bootstrap_is_idempotent_and_backfills_workspace_id():
     with Session(engine) as s:
         default_ws = s.exec(select(TiWorkspace).where(TiWorkspace.name == "默认")).one()
         s.add(TiTerm(domain="biz", term="legacy", standard="遗留术语", workspace_id=None))
+        branding = s.exec(select(TiOrgBranding)).one()
+        branding.product_name = "自定义产品"
+        branding.tagline = "自定义副标题"
+        branding.preset_id = "ocean"
+        branding.color_mode = "dark"
+        s.add(branding)
         s.commit()
 
     seed_tenant_bootstrap(engine, default_database_url="sqlite://")
@@ -50,7 +64,14 @@ def test_seed_tenant_bootstrap_is_idempotent_and_backfills_workspace_id():
         assert s.exec(select(func.count()).select_from(TiUser)).one() == 1
         assert s.exec(select(func.count()).select_from(TiWorkspaceMember)).one() == 1
         assert s.exec(select(func.count()).select_from(TiDatasource)).one() == 1
+        assert s.exec(select(func.count()).select_from(TiOrgBranding)).one() == 1
 
         default_ws = s.exec(select(TiWorkspace).where(TiWorkspace.name == "默认")).one()
         term = s.exec(select(TiTerm).where(TiTerm.term == "legacy")).one()
         assert term.workspace_id == default_ws.id
+
+        branding = s.exec(select(TiOrgBranding)).one()
+        assert branding.product_name == "自定义产品"
+        assert branding.tagline == "自定义副标题"
+        assert branding.preset_id == "ocean"
+        assert branding.color_mode == "dark"
