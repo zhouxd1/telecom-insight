@@ -1,4 +1,4 @@
-"""Org branding read/update APIs (upload/media in a later task)."""
+"""Org branding read/update APIs + logo/favicon upload and media serve."""
 
 from __future__ import annotations
 
@@ -6,15 +6,24 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlmodel import Session, select
 
 from apps.api.branding_presets import PRESETS
 from apps.api.branding_resolve import resolve_branding_colors
 from apps.api.db import get_session
 from apps.api.deps import get_current_user, require_org_admin
+from apps.api.media_store import (
+    MEDIA_TYPES,
+    MediaStoreError,
+    branding_file_abs,
+    delete_branding_file,
+    save_branding_file,
+)
 from apps.api.models_db import TiOrg, TiOrgBranding, TiUser
 from apps.api.schemas import BrandingOut, BrandingUpdate
+from apps.api.settings import settings
 
 router = APIRouter(tags=["branding"])
 
@@ -28,6 +37,10 @@ _DEFAULT_TAGLINE = "运营商智能问数"
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _data_dir() -> Path:
+    return Path(settings.branding_data_dir)
 
 
 def _media_src(org_id: int | None, relative_path: str | None, fallback_url: str | None, default: str) -> str:
@@ -140,6 +153,55 @@ def _validate_update(body: BrandingUpdate) -> None:
             )
 
 
+async def _upload_kind(
+    *,
+    kind: str,
+    file: UploadFile,
+    user: TiUser,
+    session: Session,
+) -> BrandingOut:
+    data = await file.read()
+    try:
+        rel = save_branding_file(
+            user.org_id,
+            kind,
+            file.filename or f"{kind}.png",
+            data,
+            _data_dir(),
+            content_type=file.content_type,
+        )
+    except MediaStoreError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    row = _get_or_create_branding(session, user.org_id)
+    path_attr = "logo_path" if kind == "logo" else "favicon_path"
+    old = getattr(row, path_attr)
+    setattr(row, path_attr, rel)
+    row.updated_at = _utcnow()
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    if old and old != rel:
+        delete_branding_file(_data_dir(), old)
+    return branding_out(row)
+
+
+def _delete_kind(*, kind: str, user: TiUser, session: Session) -> BrandingOut:
+    row = _get_or_create_branding(session, user.org_id)
+    path_attr = "logo_path" if kind == "logo" else "favicon_path"
+    old = getattr(row, path_attr)
+    setattr(row, path_attr, None)
+    row.updated_at = _utcnow()
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    delete_branding_file(_data_dir(), old)
+    return branding_out(row)
+
+
 @router.get("/branding/default", response_model=BrandingOut)
 def get_default_branding(session: Session = Depends(get_session)):
     org = session.exec(select(TiOrg).order_by(TiOrg.id)).first()
@@ -174,3 +236,56 @@ def update_my_branding(
     session.commit()
     session.refresh(row)
     return branding_out(row)
+
+
+@router.post("/orgs/me/branding/logo", response_model=BrandingOut)
+async def upload_my_logo(
+    file: UploadFile = File(...),
+    user: TiUser = Depends(require_org_admin),
+    session: Session = Depends(get_session),
+):
+    return await _upload_kind(kind="logo", file=file, user=user, session=session)
+
+
+@router.post("/orgs/me/branding/favicon", response_model=BrandingOut)
+async def upload_my_favicon(
+    file: UploadFile = File(...),
+    user: TiUser = Depends(require_org_admin),
+    session: Session = Depends(get_session),
+):
+    return await _upload_kind(kind="favicon", file=file, user=user, session=session)
+
+
+@router.delete("/orgs/me/branding/logo", response_model=BrandingOut)
+def delete_my_logo(
+    user: TiUser = Depends(require_org_admin),
+    session: Session = Depends(get_session),
+):
+    return _delete_kind(kind="logo", user=user, session=session)
+
+
+@router.delete("/orgs/me/branding/favicon", response_model=BrandingOut)
+def delete_my_favicon(
+    user: TiUser = Depends(require_org_admin),
+    session: Session = Depends(get_session),
+):
+    return _delete_kind(kind="favicon", user=user, session=session)
+
+
+@router.get("/media/branding/{org_id}/{filename}")
+def get_branding_media(org_id: int, filename: str):
+    """Public org-scoped media (login page logos); path is traversal-safe."""
+    try:
+        path = branding_file_abs(_data_dir(), org_id, filename)
+    except MediaStoreError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="not found",
+        ) from exc
+    if not path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="not found",
+        )
+    media_type = MEDIA_TYPES.get(Path(filename).suffix.lower(), "application/octet-stream")
+    return FileResponse(path, media_type=media_type)

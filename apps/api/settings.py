@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     demo_username: str = "demo"
     demo_password: str = "demo123"
     packs_root: str = "packs"
+    branding_data_dir: str = "data/branding"
     database_url: str = "sqlite://"
     llm_api_key: str = ""
     llm_base_url: str | None = None

@@ -10,3 +10,7 @@ dist/
 .DS_Store
 
 .worktrees/
+
+# Local branding uploads (keep directory via .gitkeep)
+data/branding/**
+!data/branding/.gitkeep

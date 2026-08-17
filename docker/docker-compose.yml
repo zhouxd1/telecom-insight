@@ -28,6 +28,9 @@ services:
       TI_DEMO_PASSWORD: demo123
       TI_LLM_API_KEY: ""
       TI_PACKS_ROOT: /app/packs
+      TI_BRANDING_DATA_DIR: /app/data/branding
+    volumes:
+      - branding_data:/app/data/branding
     ports:
       - "8000:8000"
     depends_on:
@@ -46,3 +49,4 @@ services:
 
 volumes:
   pgdata:
+  branding_data:
