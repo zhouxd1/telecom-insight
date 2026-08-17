@@ -173,3 +173,47 @@ def test_org_admin_bypass_skips_rls(client: TestClient, tmp_path, monkeypatch):
     assert body.get("sql")
     assert "华东" not in body["sql"]
     assert len(body.get("rows") or []) == 3
+
+
+def test_org_admin_bypass_false_applies_member_rls(
+    client: TestClient, tmp_path, monkeypatch
+):
+    """§7.3: org_admin with rls_admin_bypass=false and a membership policy is filtered."""
+    unfiltered = "SELECT region, n FROM sub_month"
+    _wire_fake_ask(monkeypatch, tmp_path, sql=unfiltered)
+
+    with Session(db.get_engine()) as session:
+        org = session.exec(select(TiOrg)).one()
+        org.rls_admin_bypass = False
+        admin = session.exec(select(TiUser).where(TiUser.username == "demo")).one()
+        member = session.exec(
+            select(TiWorkspaceMember).where(TiWorkspaceMember.user_id == admin.id)
+        ).one()
+        session.add(
+            TiRlsPolicy(
+                workspace_id=member.workspace_id,
+                member_id=member.id,  # type: ignore[arg-type]
+                domain="biz",
+                schema_name="biz",
+                table_name="sub_month",
+                column_name="region",
+                op="in",
+                values=["华东"],
+            )
+        )
+        session.commit()
+
+    headers = workspace_headers(client)
+    r = client.post(
+        "/ask",
+        headers=headers,
+        json={"domain": "biz", "question": "各区域用户数"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "ok"
+    assert body.get("sql")
+    assert "华东" in body["sql"]
+    regions = {row.get("region") for row in body.get("rows") or []}
+    if regions:
+        assert regions == {"华东"}

@@ -91,3 +91,50 @@ def test_apply_rls_union_with_policies_raises():
             preds,
             dialect="postgres",
         )
+
+
+def test_apply_rls_subquery_only_policy_table_raises():
+    """Policy table only inside EXISTS/subquery must refuse — never silent outer WHERE."""
+    preds = [RlsPredicate("biz", "sub_month", "region", "in", ["华东"])]
+    with pytest.raises(SqlGuardError, match="cannot safely apply rls"):
+        apply_rls(
+            "SELECT id FROM other_table WHERE EXISTS (SELECT 1 FROM biz.sub_month)",
+            preds,
+            dialect="postgres",
+        )
+
+
+def test_apply_rls_exists_subquery_only_raises():
+    """Policy table only inside EXISTS must not silently filter the outer SELECT."""
+    preds = [RlsPredicate("biz", "sub_month", "region", "in", ["华东"])]
+    sql = (
+        "SELECT u.id FROM other.users AS u "
+        "WHERE EXISTS (SELECT 1 FROM biz.sub_month AS s WHERE s.region = u.region)"
+    )
+    with pytest.raises(SqlGuardError, match="cannot safely apply rls"):
+        apply_rls(sql, preds, dialect="postgres")
+
+
+def test_apply_rls_join_two_policy_tables():
+    """JOIN of two policy tables: qualified injection or refuse — never ambiguous cols."""
+    preds = [
+        RlsPredicate("biz", "sub_month", "region", "in", ["华东"]),
+        RlsPredicate("biz", "channel_day", "channel", "eq", ["营业厅"]),
+    ]
+    sql = (
+        "SELECT s.region, c.channel FROM biz.sub_month AS s "
+        "JOIN biz.channel_day AS c ON s.day = c.day"
+    )
+    try:
+        out = apply_rls(sql, preds, dialect="postgres")
+    except SqlGuardError as e:
+        assert "cannot safely apply rls" in str(e).lower()
+        return
+    assert "华东" in out and "营业厅" in out
+    # Filters must bind to the correct join side (not bare region/channel)
+    where_part = out.upper().split("WHERE", 1)[-1] if "WHERE" in out.upper() else ""
+    assert where_part, "expected WHERE clause with RLS filters"
+    wlow = where_part.lower()
+    assert "s.region" in wlow or "biz.sub_month.region" in wlow
+    assert "c.channel" in wlow or "biz.channel_day.channel" in wlow
+    assert " region in" not in f" {wlow}" and " channel =" not in f" {wlow}"
