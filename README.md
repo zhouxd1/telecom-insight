@@ -28,6 +28,12 @@
 - **多库 P0**：Postgres / MySQL / SQL Server / Hive / OpenGauss / GaussDB / OceanBase(MySQL) / TiDB / Kingbase / Dameng — 验证矩阵见 [phase1b-db-verification-matrix.md](docs/superpowers/plans/phase1b-db-verification-matrix.md)
 - **可选驱动**：Hive JDBC / Dameng `dmPython` 等非默认依赖；无驱动时 CI 仍跑 URL 单元测试，测连可跳过
 
+## Row-level security (RLS)
+
+- **成员行权限**：工作空间成员可配置 `in` / `eq` 策略（如 `biz.sub_month.region`）；Ask 在 SQL Guard 之后改写，Prompt 注入过滤提示
+- **组织旁路开关**：`org_admin` 可开关 `rls_admin_bypass`（默认开）— 开启时组织管理员提问跳过行级过滤
+- **演示账号**：`analyst1` / `analyst123`（种子策略：区域 ∈ `华东`）；`demo` / `demo123` 仍为 `org_admin`
+
 ## Clean-room note
 
 本项目为独立 clean-room 实现，**不是** SQLBot 的 fork、拷贝或衍生作品。架构与代码均为本仓库原创。
@@ -44,7 +50,7 @@ docker compose -f docker/docker-compose.yml up --build
 | API | http://localhost:8000 |
 | Postgres | localhost:5432 |
 
-Demo login: **demo** / **demo123**
+Demo login: **demo** / **demo123**（`org_admin`）；RLS 演示：**analyst1** / **analyst123**（华东行权限）
 
 Compose volumes: `pgdata`（库数据）、`branding_data`（组织 Logo/favicon 上传，挂到 API 的 `TI_BRANDING_DATA_DIR`）。
 
