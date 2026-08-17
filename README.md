@@ -24,6 +24,7 @@
 - **请求头**：需空间上下文的 API 携带 `Authorization` + **`X-Workspace-Id`**
 - **数据源**：可切换执行库；Ask 打到会话绑定源或空间默认源
 - **演示登录不变**：`demo` / `demo123`（`org_admin`，默认空间全开）
+- **白标外观**：`org_admin` 侧栏「外观」可改产品名、副标题、预设色板、Logo/favicon；`analyst` / `viewer` 无写入口
 - **多库 P0**：Postgres / MySQL / SQL Server / Hive / OpenGauss / GaussDB / OceanBase(MySQL) / TiDB / Kingbase / Dameng — 验证矩阵见 [phase1b-db-verification-matrix.md](docs/superpowers/plans/phase1b-db-verification-matrix.md)
 - **可选驱动**：Hive JDBC / Dameng `dmPython` 等非默认依赖；无驱动时 CI 仍跑 URL 单元测试，测连可跳过
 
@@ -44,6 +45,8 @@ docker compose -f docker/docker-compose.yml up --build
 | Postgres | localhost:5432 |
 
 Demo login: **demo** / **demo123**
+
+Compose volumes: `pgdata`（库数据）、`branding_data`（组织 Logo/favicon 上传，挂到 API 的 `TI_BRANDING_DATA_DIR`）。
 
 首次启动后如需灌数（视 compose / 镜像是否已 seed）：
 
@@ -71,6 +74,7 @@ Copy `.env.example` and adjust. Prefix is `TI_`:
 | `TI_DEMO_USERNAME` / `TI_DEMO_PASSWORD` | Demo login (default demo / demo123) |
 | `TI_DATABASE_URL` | SQLAlchemy URL (Postgres or SQLite for tests) |
 | `TI_PACKS_ROOT` | Industry packs directory (default `packs`) |
+| `TI_BRANDING_DATA_DIR` | Org logo/favicon upload dir (default `data/branding`; Compose volume `branding_data`) |
 | `TI_LLM_API_KEY` | Optional; empty → demo FakeLLM from pack examples |
 | `TI_LLM_BASE_URL` | Optional OpenAI-compatible base URL |
 | `TI_LLM_MODEL` | Model name (default `gpt-4o-mini`) |

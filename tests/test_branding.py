@@ -1,9 +1,44 @@
+from sqlmodel import Session, SQLModel, create_engine, select
+
+from apps.api.models_db import TiOrg, TiOrgBranding
 from apps.api.settings import settings
 
 PNG = bytes.fromhex(
     "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
     "0000000a49444154789c63000100000500010d0a2db40000000049454e44ae426082"
 )
+
+
+def test_org_branding_rows_are_independent():
+    """Two orgs keep independent TiOrgBranding product_name values."""
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as s:
+        org_a = TiOrg(name="运营商甲")
+        org_b = TiOrg(name="运营商乙")
+        s.add(org_a)
+        s.add(org_b)
+        s.commit()
+        s.refresh(org_a)
+        s.refresh(org_b)
+
+        s.add(TiOrgBranding(org_id=org_a.id, product_name="智数甲"))
+        s.add(TiOrgBranding(org_id=org_b.id, product_name="智数乙"))
+        s.commit()
+
+        a = s.get(TiOrgBranding, org_a.id)
+        b = s.get(TiOrgBranding, org_b.id)
+        assert a is not None and b is not None
+        assert a.product_name == "智数甲"
+        assert b.product_name == "智数乙"
+
+        a.product_name = "智数甲·改"
+        s.add(a)
+        s.commit()
+
+        rows = {row.org_id: row.product_name for row in s.exec(select(TiOrgBranding)).all()}
+        assert rows[org_a.id] == "智数甲·改"
+        assert rows[org_b.id] == "智数乙"
 
 
 def test_default_branding_public(client_with_seed):
