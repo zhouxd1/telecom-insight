@@ -89,6 +89,41 @@ export type DatasourceTestResult = {
   error?: string | null;
 };
 
+export type DatasourceSchemaColumn = {
+  name: string;
+  data_type: string;
+  nullable: boolean;
+  granted: boolean;
+};
+
+export type DatasourceSchemaTable = {
+  schema_name: string;
+  table_name: string;
+  granted: boolean;
+  columns: DatasourceSchemaColumn[];
+};
+
+export type DatasourceSchema = {
+  datasource_id: number;
+  tables: DatasourceSchemaTable[];
+};
+
+export type DatasourceIntrospectResult = {
+  tables: number;
+  columns: number;
+};
+
+export type DatasourceGrantTable = {
+  schema_name: string;
+  table_name: string;
+  columns: string[];
+};
+
+export type DatasourceGrantsSaveResult = {
+  tables: number;
+  columns: number;
+};
+
 export type RecommendedItem = {
   id: string;
   text: string;
@@ -383,6 +418,29 @@ export async function setDefaultDatasource(id: number): Promise<Datasource> {
 
 export async function deleteDatasource(id: number): Promise<void> {
   await client.delete(`/admin/datasources/${id}`);
+}
+
+export async function introspectDatasource(id: number): Promise<DatasourceIntrospectResult> {
+  const { data } = await client.post<DatasourceIntrospectResult>(
+    `/admin/datasources/${id}/introspect`,
+  );
+  return data;
+}
+
+export async function fetchDatasourceSchema(id: number): Promise<DatasourceSchema> {
+  const { data } = await client.get<DatasourceSchema>(`/admin/datasources/${id}/schema`);
+  return data;
+}
+
+export async function saveDatasourceGrants(
+  id: number,
+  tables: DatasourceGrantTable[],
+): Promise<DatasourceGrantsSaveResult> {
+  const { data } = await client.put<DatasourceGrantsSaveResult>(
+    `/admin/datasources/${id}/grants`,
+    { tables },
+  );
+  return data;
 }
 
 export async function listDomains(): Promise<DomainInfo[]> {
