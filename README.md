@@ -34,6 +34,13 @@
 - **组织旁路开关**：`org_admin` 可开关 `rls_admin_bypass`（默认开）— 开启时组织管理员提问跳过行级过滤
 - **演示账号**：`analyst1` / `analyst123`（种子策略：区域 ∈ `华东`）；`demo` / `demo123` 仍为 `org_admin`
 
+## Schema Catalog & field ACL
+
+- **Catalog 服务**：外挂 FastAPI（Compose 服务 `catalog`），默认 **http://localhost:8001**；主 API 经 `TI_CATALOG_BASE_URL` 调用（Compose 内为 `http://catalog:8001`）
+- **授权流程**（数据源页，仅 `org_admin`）：「刷新结构」探测并快照表/列 →「字段授权」勾选工作空间可用表与列并保存
+- **Ask 生效规则**：表白名单与列允许集来自 Catalog `effective`（Pack `table_whitelist` 不再作为真相）；**空授权拒绝 Ask**；未授权列拒绝（不遮罩）
+- **演示种子**：启动时对演示默认源预授权 `biz.sub_month` / `biz.channel_day` 等核心列，保证 `demo` 开箱可问
+
 ## Clean-room note
 
 本项目为独立 clean-room 实现，**不是** SQLBot 的 fork、拷贝或衍生作品。架构与代码均为本仓库原创。
@@ -48,6 +55,7 @@ docker compose -f docker/docker-compose.yml up --build
 |---------|-----|
 | Web | http://localhost:8080 |
 | API | http://localhost:8000 |
+| Catalog | http://localhost:8001 |
 | Postgres | localhost:5432 |
 
 Demo login: **demo** / **demo123**（`org_admin`）；RLS 演示：**analyst1** / **analyst123**（华东行权限）
@@ -79,6 +87,8 @@ Copy `.env.example` and adjust. Prefix is `TI_`:
 | `TI_JWT_SECRET` | JWT signing secret |
 | `TI_DEMO_USERNAME` / `TI_DEMO_PASSWORD` | Demo login (default demo / demo123) |
 | `TI_DATABASE_URL` | SQLAlchemy URL (Postgres or SQLite for tests) |
+| `TI_CATALOG_BASE_URL` | Catalog service base URL (default `http://127.0.0.1:8001`) |
+| `TI_CATALOG_DATABASE_URL` | Catalog DB URL (Compose: same Postgres; SQLite OK for Catalog unit tests) |
 | `TI_PACKS_ROOT` | Industry packs directory (default `packs`) |
 | `TI_BRANDING_DATA_DIR` | Org logo/favicon upload dir (default `data/branding`; Compose volume `branding_data`) |
 | `TI_LLM_API_KEY` | Optional; empty → demo FakeLLM from pack examples |
