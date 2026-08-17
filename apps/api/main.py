@@ -6,8 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlmodel import Session
 
-from apps.api import deps
+from apps.api import catalog_client, deps
 from apps.api.acl import EffectiveAccess
+from apps.api.catalog_effective import parse_effective_grants
 from apps.api.db import get_engine, get_session
 from apps.api.deps import (
     dialect_for_datasource,
@@ -119,6 +120,17 @@ def ask(
             steps=[],
         )
 
+    eff = catalog_client.get_effective(
+        workspace_id=workspace.id,  # type: ignore[arg-type]
+        datasource_id=ds.id,  # type: ignore[arg-type]
+    )
+    if eff.get("empty"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="请先在数据源中授权表字段",
+        )
+    table_whitelist, allowed_columns = parse_effective_grants(eff)
+
     warehouse = None
     try:
         warehouse = build_engine_from_datasource(ds)
@@ -158,6 +170,8 @@ def ask(
             extra_terms=extra_terms,
             extra_examples=extra_examples,
             rls_predicates=rls_predicates,
+            table_whitelist=table_whitelist,
+            allowed_columns=allowed_columns,
         )
     finally:
         warehouse.dispose()

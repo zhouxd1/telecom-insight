@@ -90,3 +90,53 @@ def test_ask_applies_rls_after_guard(tmp_path):
     assert "华东" in llm.last_terminology
     assert len(resp.rows) == 1
     assert resp.rows[0]["arpu"] == 50
+
+
+def test_ask_uses_table_whitelist_override(tmp_path):
+    eng = create_engine(f"sqlite:///{tmp_path / 't.db'}")
+    with eng.begin() as c:
+        c.execute(text("CREATE TABLE users(month TEXT, arpu REAL)"))
+    llm = FakeLLM(sql="SELECT month, arpu FROM users", narrative="x")
+    engine = AskEngine(warehouse=eng, llm=llm, packs_by_domain={"biz": _pack()})
+    resp = engine.ask(
+        AskRequest(domain="biz", question="各月ARPU"),
+        table_whitelist={"other_table"},
+    )
+    assert resp.status == "error"
+    assert "安全" in resp.message
+
+
+def test_ask_rejects_disallowed_columns(tmp_path):
+    eng = create_engine(f"sqlite:///{tmp_path / 't.db'}")
+    with eng.begin() as c:
+        c.execute(text("CREATE TABLE users(month TEXT, arpu REAL, secret TEXT)"))
+    llm = FakeLLM(sql="SELECT month, secret FROM users", narrative="x")
+    engine = AskEngine(warehouse=eng, llm=llm, packs_by_domain={"biz": _pack()})
+    resp = engine.ask(
+        AskRequest(domain="biz", question="各月ARPU"),
+        table_whitelist={"users"},
+        allowed_columns={"users": {"month", "arpu"}},
+    )
+    assert resp.status == "error"
+    assert "安全" in resp.message
+
+
+def test_ask_appends_allowed_columns_to_terminology(tmp_path):
+    eng = create_engine(f"sqlite:///{tmp_path / 't.db'}")
+    with eng.begin() as c:
+        c.execute(text("CREATE TABLE users(month TEXT, arpu REAL)"))
+        c.execute(text("INSERT INTO users VALUES ('2026-01', 50)"))
+    llm = _RecordingFakeLLM(
+        sql="SELECT month, arpu FROM users",
+        narrative="ok",
+    )
+    engine = AskEngine(warehouse=eng, llm=llm, packs_by_domain={"biz": _pack()})
+    resp = engine.ask(
+        AskRequest(domain="biz", question="各月ARPU"),
+        table_whitelist={"users"},
+        allowed_columns={"users": {"month", "arpu"}},
+    )
+    assert resp.status == "ok"
+    assert llm.last_terminology is not None
+    assert "[允许的表与字段]" in llm.last_terminology
+    assert "users: arpu, month" in llm.last_terminology

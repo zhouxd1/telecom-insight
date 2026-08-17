@@ -6,6 +6,7 @@ from sqlalchemy.engine import Engine
 from apps.engine.audit import AuditRecord, InMemoryAuditLog
 from apps.engine.chart import build_chart_option
 from apps.engine.clarify import needs_clarification
+from apps.engine.column_guard import assert_columns_allowed
 from apps.engine.executor import execute_select
 from apps.engine.llm import LLMClient
 from apps.engine.rls import RlsPredicate, apply_rls, format_rls_prompt
@@ -70,6 +71,8 @@ class AskEngine:
         extra_examples: list[Example] | None = None,
         dialect: str | None = None,
         rls_predicates: list[RlsPredicate] | None = None,
+        table_whitelist: set[str] | list[str] | None = None,
+        allowed_columns: dict[str, set[str]] | None = None,
     ) -> AskResponse:
         pack = self.packs.get(req.domain)
         if not pack:
@@ -85,10 +88,24 @@ class AskEngine:
 
         schema_ctx = retrieve_schema_context(pack, req.question)
         terminology, examples = merge_pack_context(pack, extra_terms, extra_examples)
+        if allowed_columns is not None:
+            allow_lines = ["[允许的表与字段]"]
+            for table in sorted(allowed_columns):
+                cols = ", ".join(sorted(allowed_columns[table]))
+                allow_lines.append(f"{table}: {cols}" if cols else f"{table}: (无列)")
+            allow_prompt = "\n".join(allow_lines)
+            terminology = (
+                f"{terminology}\n{allow_prompt}" if terminology else allow_prompt
+            )
         if rls_predicates:
             rls_prompt = format_rls_prompt(rls_predicates)
             if rls_prompt:
                 terminology = f"{terminology}\n{rls_prompt}" if terminology else rls_prompt
+        whitelist = (
+            set(table_whitelist)
+            if table_whitelist is not None
+            else set(pack.table_whitelist)
+        )
         guard_dialect = dialect if dialect is not None else self.dialect
         try:
             sql = self.llm.generate_sql(
@@ -97,10 +114,13 @@ class AskEngine:
                 examples=examples,
                 terminology=terminology,
             )
-            sql = guard_sql(sql, set(pack.table_whitelist), dialect=guard_dialect)
+            # Order: guard → column_guard → apply_rls → guard
+            sql = guard_sql(sql, whitelist, dialect=guard_dialect)
+            if allowed_columns is not None:
+                assert_columns_allowed(sql, allowed_columns, dialect=guard_dialect)
             if rls_predicates:
                 sql = apply_rls(sql, rls_predicates, dialect=guard_dialect)
-                sql = guard_sql(sql, set(pack.table_whitelist), dialect=guard_dialect)
+                sql = guard_sql(sql, whitelist, dialect=guard_dialect)
             rows, truncated = execute_select(self.warehouse, sql, max_rows=self.max_rows)
             narrative = self.llm.narrate(question=req.question, sql=sql, rows_preview=rows)
             chart = build_chart_option(rows)

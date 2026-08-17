@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from apps.api import db
+from apps.api import catalog_client, db
 from apps.api.init_db import init_db, seed_tenant_bootstrap
 from apps.api.main import app
 from apps.api.settings import settings
@@ -9,6 +9,27 @@ from tests.api_helpers import login_headers, workspace_headers
 
 # Re-export helpers for tests that import from conftest.
 __all__ = ["login_headers", "workspace_headers"]
+
+# Permissive default so ask API tests work without a live Catalog.
+# Specific tests (e.g. test_ask_catalog_grants) override get_effective.
+_DEFAULT_EFFECTIVE = {
+    "tables": ["users", "sub_month", "channel_day"],
+    "columns": {
+        "users": ["month", "arpu", "region", "n"],
+        "sub_month": ["region", "n", "sub_cnt", "secret", "arpu"],
+        "channel_day": ["region", "channel", "day"],
+    },
+    "empty": False,
+}
+
+
+@pytest.fixture(autouse=True)
+def _permissive_catalog_effective(monkeypatch):
+    monkeypatch.setattr(
+        catalog_client,
+        "get_effective",
+        lambda **_kw: dict(_DEFAULT_EFFECTIVE),
+    )
 
 
 @pytest.fixture
