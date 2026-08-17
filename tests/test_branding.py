@@ -118,6 +118,47 @@ def test_upload_rejects_oversized_and_bad_type(authenticated_client, tmp_path, m
     assert bad_type.status_code == 400
 
 
+def test_upload_rejects_dangerous_svg(authenticated_client, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "branding_data_dir", str(tmp_path / "branding"))
+
+    cases = [
+        b'<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"></svg>',
+        b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+        b'<svg xmlns="http://www.w3.org/2000/svg"><a href="javascript:alert(1)"></a></svg>',
+        b'<svg xmlns="http://www.w3.org/2000/svg"><foreignObject></foreignObject></svg>',
+        b'<svg xmlns="http://www.w3.org/2000/svg"><image onerror="alert(1)"></image></svg>',
+    ]
+    for payload in cases:
+        r = authenticated_client.post(
+            "/orgs/me/branding/logo",
+            files={"file": ("logo.svg", payload, "image/svg+xml")},
+        )
+        assert r.status_code == 400, payload
+
+
+def test_upload_rejects_svg_without_content_type(authenticated_client, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "branding_data_dir", str(tmp_path / "branding"))
+    safe = b'<svg xmlns="http://www.w3.org/2000/svg"><circle r="1"/></svg>'
+    r = authenticated_client.post(
+        "/orgs/me/branding/logo",
+        files={"file": ("logo.svg", safe, "")},
+    )
+    assert r.status_code == 400
+
+
+def test_safe_svg_upload_serves_attachment(authenticated_client, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "branding_data_dir", str(tmp_path / "branding"))
+    safe = b'<svg xmlns="http://www.w3.org/2000/svg"><circle cx="1" cy="1" r="1"/></svg>'
+    r = authenticated_client.post(
+        "/orgs/me/branding/logo",
+        files={"file": ("logo.svg", safe, "image/svg+xml")},
+    )
+    assert r.status_code == 200
+    media = authenticated_client.get(r.json()["logo_src"])
+    assert media.status_code == 200
+    assert "attachment" in (media.headers.get("content-disposition") or "").lower()
+
+
 def test_delete_logo_clears_path(authenticated_client, tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "branding_data_dir", str(tmp_path / "branding"))
 

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
+from typing import Any
 
-ALLOWED = {".png": b"\x89PNG", ".webp": b"RIFF", ".svg": None}  # svg: content-type + no <script>
+ALLOWED = {".png": b"\x89PNG", ".webp": b"RIFF", ".svg": None}  # svg: content-type + sanitize
 MAX_BYTES = 512_000
 _KINDS = frozenset({"logo", "favicon"})
 MEDIA_TYPES = {
@@ -12,6 +14,10 @@ MEDIA_TYPES = {
     ".webp": "image/webp",
     ".svg": "image/svg+xml",
 }
+_SVG_OK_TYPES = frozenset({"image/svg+xml", "text/xml", "application/xml"})
+# Event handlers like onload / onerror (word-boundary style).
+_SVG_EVENT_RE = re.compile(r"\bon[a-z]+\s*=", re.IGNORECASE)
+_SVG_JS_URL_RE = re.compile(r"javascript\s*:", re.IGNORECASE)
 
 
 class MediaStoreError(ValueError):
@@ -26,6 +32,39 @@ def media_content_type(filename: str) -> str:
     return MEDIA_TYPES.get(Path(filename).suffix.lower(), "application/octet-stream")
 
 
+async def read_upload_capped(upload: Any, *, max_bytes: int = MAX_BYTES) -> bytes:
+    """Read an UploadFile-like object with a hard size cap (never buffer past max+1)."""
+    headers = getattr(upload, "headers", None) or {}
+    cl = headers.get("content-length") or headers.get("Content-Length")
+    if cl is None:
+        size = getattr(upload, "size", None)
+        if size is not None:
+            cl = str(size)
+    if cl is not None:
+        try:
+            declared = int(cl)
+        except (TypeError, ValueError) as exc:
+            raise MediaStoreError("invalid content length") from exc
+        if declared > max_bytes:
+            raise MediaStoreError("file too large")
+
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        # Read in bounded chunks; stop once we exceed the limit.
+        need = max_bytes + 1 - total
+        if need <= 0:
+            raise MediaStoreError("file too large")
+        chunk = await upload.read(min(64 * 1024, need))
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise MediaStoreError("file too large")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 def _ext_of(filename: str) -> str:
     name = Path(filename).name
     if ".." in name or "/" in name or "\\" in name:
@@ -36,6 +75,24 @@ def _ext_of(filename: str) -> str:
     return ext
 
 
+def _validate_svg(data: bytes, content_type: str | None) -> None:
+    ct = (content_type or "").split(";")[0].strip().lower()
+    if not ct or ct not in _SVG_OK_TYPES:
+        raise MediaStoreError("invalid content type")
+    text = data.decode("utf-8", errors="ignore")
+    lower = text.lower()
+    if "<svg" not in lower:
+        raise MediaStoreError("invalid svg content")
+    if "<script" in lower:
+        raise MediaStoreError("svg must not contain script")
+    if "<foreignobject" in lower:
+        raise MediaStoreError("svg must not contain foreignObject")
+    if _SVG_JS_URL_RE.search(text):
+        raise MediaStoreError("svg must not contain javascript urls")
+    if _SVG_EVENT_RE.search(text):
+        raise MediaStoreError("svg must not contain event handlers")
+
+
 def _validate_payload(ext: str, data: bytes, content_type: str | None = None) -> None:
     if len(data) > MAX_BYTES:
         raise MediaStoreError("file too large")
@@ -44,14 +101,7 @@ def _validate_payload(ext: str, data: bytes, content_type: str | None = None) ->
         if not data.startswith(magic):
             raise MediaStoreError("invalid file content")
         return
-    ct = (content_type or "").split(";")[0].strip().lower()
-    if ct and ct not in ("image/svg+xml", "text/xml", "application/xml"):
-        raise MediaStoreError("invalid content type")
-    text = data.decode("utf-8", errors="ignore").lower()
-    if "<script" in text:
-        raise MediaStoreError("svg must not contain script")
-    if "<svg" not in text:
-        raise MediaStoreError("invalid svg content")
+    _validate_svg(data, content_type)
 
 
 def save_branding_file(

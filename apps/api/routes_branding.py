@@ -19,6 +19,7 @@ from apps.api.media_store import (
     MediaStoreError,
     branding_file_abs,
     delete_branding_file,
+    read_upload_capped,
     save_branding_file,
 )
 from apps.api.models_db import TiOrg, TiOrgBranding, TiUser
@@ -160,8 +161,8 @@ async def _upload_kind(
     user: TiUser,
     session: Session,
 ) -> BrandingOut:
-    data = await file.read()
     try:
+        data = await read_upload_capped(file)
         rel = save_branding_file(
             user.org_id,
             kind,
@@ -288,4 +289,8 @@ def get_branding_media(org_id: int, filename: str):
             detail="not found",
         )
     media_type = MEDIA_TYPES.get(Path(filename).suffix.lower(), "application/octet-stream")
-    return FileResponse(path, media_type=media_type)
+    headers = {}
+    if Path(filename).suffix.lower() == ".svg":
+        # Belt-and-suspenders: never inline-execute SVG in the browser.
+        headers["Content-Disposition"] = f'attachment; filename="{Path(filename).name}"'
+    return FileResponse(path, media_type=media_type, headers=headers)
