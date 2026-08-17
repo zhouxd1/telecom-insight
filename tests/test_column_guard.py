@@ -60,3 +60,17 @@ def test_allows_qualified_multi_table():
         "channel_day": {"region", "channel"},
     }
     assert_columns_allowed(sql, allowed, dialect="postgres")
+
+
+def test_rejects_unauthorized_column_in_where():
+    sql = "SELECT region FROM biz.sub_month WHERE secret = 1"
+    allowed = {"sub_month": {"region", "sub_cnt"}}
+    with pytest.raises(SqlGuardError):
+        assert_columns_allowed(sql, allowed, dialect="postgres")
+
+
+def test_rejects_unauthorized_column_in_group_by():
+    sql = "SELECT region, SUM(sub_cnt) FROM biz.sub_month GROUP BY secret"
+    allowed = {"sub_month": {"region", "sub_cnt"}}
+    with pytest.raises(SqlGuardError):
+        assert_columns_allowed(sql, allowed, dialect="postgres")
