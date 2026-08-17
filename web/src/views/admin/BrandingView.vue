@@ -146,7 +146,7 @@
                 <span>上传 Favicon</span>
                 <input
                   type="file"
-                  accept="image/png,image/svg+xml,image/webp,image/x-icon,image/vnd.microsoft.icon"
+                  accept="image/png,image/svg+xml,image/webp"
                   :disabled="uploadingFavicon"
                   @change="onFaviconFile"
                 />
