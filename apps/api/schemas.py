@@ -291,6 +291,16 @@ class DatasourceTestResult(BaseModel):
     error: Optional[str] = None
 
 
+class DatasourceGrantTable(BaseModel):
+    schema_name: str
+    table_name: str
+    columns: list[str] = Field(default_factory=list)
+
+
+class DatasourceGrantsPut(BaseModel):
+    tables: list[DatasourceGrantTable] = Field(default_factory=list)
+
+
 # --- Branding ---
 
 

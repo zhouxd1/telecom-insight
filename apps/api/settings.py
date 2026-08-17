@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_base_url: str | None = None
     llm_model: str = "gpt-4o-mini"
+    catalog_base_url: str = "http://127.0.0.1:8001"
 
 
 settings = Settings()

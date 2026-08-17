@@ -3,18 +3,21 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
+from apps.api import catalog_client
 from apps.api.acl import EffectiveAccess
-from apps.api.crypto import encrypt_secret
+from apps.api.crypto import decrypt_secret, encrypt_secret
 from apps.api.db import get_session
-from apps.api.db_types import is_p0, is_p1
+from apps.api.db_types import build_sqlalchemy_url, is_p0, is_p1
 from apps.api.deps import require_workspace
 from apps.api.models_db import TiDatasource, TiWorkspace
 from apps.api.schemas import (
     DatasourceCreate,
+    DatasourceGrantsPut,
     DatasourceOut,
     DatasourceTestResult,
     DatasourceUpdate,
@@ -92,6 +95,40 @@ def _validate_db_type(db_type: str) -> None:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"unsupported db_type: {db_type}",
         )
+
+
+def _password_plain(ds: TiDatasource) -> str:
+    token = (ds.password_enc or "").strip()
+    if not token:
+        return ""
+    try:
+        return decrypt_secret(token)
+    except Exception:
+        return ""
+
+
+def _sqlalchemy_url_for_ds(ds: TiDatasource) -> str:
+    """Build a short-lived SQLAlchemy URL for Catalog introspect (never log)."""
+    password = _password_plain(ds)
+    if ds.db_type == "sqlite":
+        database = ds.database or ":memory:"
+        if database in {":memory:", ""}:
+            return "sqlite://"
+        return f"sqlite:///{database}"
+    if not is_p0(ds.db_type):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"unsupported db_type for introspect: {ds.db_type}",
+        )
+    return build_sqlalchemy_url(
+        db_type=ds.db_type,
+        host=ds.host or "",
+        port=ds.port,
+        database=ds.database or "",
+        username=ds.username or "",
+        password=password,
+        extra=ds.extra_json,
+    )
 
 
 @router.get("", response_model=list[DatasourceOut])
@@ -245,7 +282,46 @@ def introspect_datasource(
     session: Session = Depends(get_session),
     ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
 ):
-    workspace, _access = ws_access
+    workspace, access = ws_access
+    _require_ds_manage(access)
     row = _get_workspace_ds(session, ds_id, workspace)
-    result = connectors.introspect_schema(row)
-    return {"schema": result}
+    sqlalchemy_url = _sqlalchemy_url_for_ds(row)
+    # Never log sqlalchemy_url — it may embed the password.
+    return catalog_client.introspect(
+        workspace_id=workspace.id,  # type: ignore[arg-type]
+        datasource_id=ds_id,
+        db_type=row.db_type,
+        sqlalchemy_url=sqlalchemy_url,
+    )
+
+
+@router.get("/{ds_id}/schema")
+def get_datasource_schema(
+    ds_id: int,
+    session: Session = Depends(get_session),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
+) -> dict[str, Any]:
+    workspace, _access = ws_access
+    _get_workspace_ds(session, ds_id, workspace)
+    return catalog_client.get_schema(
+        workspace_id=workspace.id,  # type: ignore[arg-type]
+        datasource_id=ds_id,
+    )
+
+
+@router.put("/{ds_id}/grants")
+def put_datasource_grants(
+    ds_id: int,
+    body: DatasourceGrantsPut,
+    session: Session = Depends(get_session),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
+) -> dict[str, Any]:
+    workspace, access = ws_access
+    _require_ds_manage(access)
+    _get_workspace_ds(session, ds_id, workspace)
+    tables = [t.model_dump() for t in body.tables]
+    return catalog_client.put_grants(
+        workspace_id=workspace.id,  # type: ignore[arg-type]
+        datasource_id=ds_id,
+        tables=tables,
+    )
