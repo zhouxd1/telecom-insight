@@ -14,6 +14,7 @@ class TiOrg(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
+    rls_admin_bypass: bool = True
     created_at: datetime = Field(default_factory=_utcnow)
 
 
@@ -151,6 +152,22 @@ class TiSqlExample(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=_utcnow)
 
 
+class TiRlsPolicy(SQLModel, table=True):
+    __tablename__ = "ti_rls_policy"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    workspace_id: int = Field(foreign_key="ti_workspace.id", index=True)
+    member_id: int = Field(foreign_key="ti_workspace_member.id", index=True)
+    domain: str
+    schema_name: str
+    table_name: str
+    column_name: str
+    op: str  # in | eq
+    values: list[Any] = Field(default_factory=list, sa_column=Column(JSON))
+    created_at: datetime = Field(default_factory=_utcnow)
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+
 # Ensure models are imported for metadata registration
 _MODELS: tuple[type[SQLModel], ...] = (
     TiOrg,
@@ -164,4 +181,5 @@ _MODELS: tuple[type[SQLModel], ...] = (
     TiAiModel,
     TiTerm,
     TiSqlExample,
+    TiRlsPolicy,
 )

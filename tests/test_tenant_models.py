@@ -10,6 +10,7 @@ from apps.api.models_db import (
     TiWorkspaceMember,
     TiDatasource,
     TiTerm,
+    TiRlsPolicy,
 )
 
 
@@ -38,6 +39,20 @@ def test_seed_creates_org_workspace_demo_and_default_ds(tmp_path, monkeypatch):
         assert branding.tagline == "运营商智能问数"
         assert branding.preset_id == "default"
         assert branding.color_mode == "light"
+        assert org.rls_admin_bypass is True
+        analyst = s.exec(select(TiUser).where(TiUser.username == "analyst1")).first()
+        assert analyst is not None and analyst.org_role == "analyst"
+        assert CryptContext(schemes=["bcrypt"]).verify("analyst123", analyst.password_hash)
+        analyst_mem = s.exec(
+            select(TiWorkspaceMember).where(TiWorkspaceMember.user_id == analyst.id)
+        ).first()
+        assert analyst_mem is not None and set(analyst_mem.domains or []) == {"biz", "network", "cs"}
+        policy = s.exec(
+            select(TiRlsPolicy).where(TiRlsPolicy.member_id == analyst_mem.id)
+        ).first()
+        assert policy is not None
+        assert policy.table_name == "sub_month" and policy.column_name == "region"
+        assert policy.op == "in" and policy.values == ["华东"]
 
 
 def test_seed_tenant_bootstrap_is_idempotent_and_backfills_workspace_id():
@@ -61,10 +76,11 @@ def test_seed_tenant_bootstrap_is_idempotent_and_backfills_workspace_id():
 
     with Session(engine) as s:
         assert s.exec(select(func.count()).select_from(TiOrg)).one() == 1
-        assert s.exec(select(func.count()).select_from(TiUser)).one() == 1
-        assert s.exec(select(func.count()).select_from(TiWorkspaceMember)).one() == 1
+        assert s.exec(select(func.count()).select_from(TiUser)).one() == 2
+        assert s.exec(select(func.count()).select_from(TiWorkspaceMember)).one() == 2
         assert s.exec(select(func.count()).select_from(TiDatasource)).one() == 1
         assert s.exec(select(func.count()).select_from(TiOrgBranding)).one() == 1
+        assert s.exec(select(func.count()).select_from(TiRlsPolicy)).one() == 1
 
         default_ws = s.exec(select(TiWorkspace).where(TiWorkspace.name == "默认")).one()
         term = s.exec(select(TiTerm).where(TiTerm.term == "legacy")).one()

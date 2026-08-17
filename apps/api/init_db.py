@@ -16,6 +16,7 @@ from apps.api.models_db import (
     TiDatasource,
     TiOrg,
     TiOrgBranding,
+    TiRlsPolicy,
     TiSqlExample,
     TiTerm,
     TiUser,
@@ -36,6 +37,7 @@ _PHASE1B_COLUMNS: list[tuple[str, str, str]] = [
     ("ti_ai_model", "workspace_id", "INTEGER"),
     ("ti_term", "workspace_id", "INTEGER"),
     ("ti_sql_example", "workspace_id", "INTEGER"),
+    ("ti_org", "rls_admin_bypass", "BOOLEAN DEFAULT TRUE"),
 ]
 
 
@@ -101,6 +103,67 @@ def _backfill_workspace_id(session: Session, workspace_id: int) -> None:
             session.add(row)
 
 
+def _ensure_analyst_rls_seed(session: Session, org: TiOrg, workspace: TiWorkspace) -> None:
+    """Create analyst1 + sample region policy if absent (create-if-absent only)."""
+    if org.id is None or workspace.id is None:
+        return
+
+    analyst = session.exec(select(TiUser).where(TiUser.username == "analyst1")).first()
+    if analyst is None:
+        analyst = TiUser(
+            org_id=org.id,
+            username="analyst1",
+            password_hash=_pwd_context.hash("analyst123"),
+            display_name="Analyst",
+            org_role="analyst",
+            enabled=True,
+        )
+        session.add(analyst)
+        session.flush()
+
+    member = session.exec(
+        select(TiWorkspaceMember).where(
+            TiWorkspaceMember.workspace_id == workspace.id,
+            TiWorkspaceMember.user_id == analyst.id,
+        )
+    ).first()
+    if member is None:
+        member = TiWorkspaceMember(
+            workspace_id=workspace.id,
+            user_id=analyst.id,  # type: ignore[arg-type]
+            role="analyst",
+            domains=list(_ALL_DOMAINS),
+        )
+        session.add(member)
+        session.flush()
+
+    if member.id is None:
+        return
+
+    existing_policy = session.exec(
+        select(TiRlsPolicy).where(
+            TiRlsPolicy.member_id == member.id,
+            TiRlsPolicy.domain == "biz",
+            TiRlsPolicy.schema_name == "biz",
+            TiRlsPolicy.table_name == "sub_month",
+            TiRlsPolicy.column_name == "region",
+        )
+    ).first()
+    if existing_policy is None:
+        session.add(
+            TiRlsPolicy(
+                workspace_id=workspace.id,
+                member_id=member.id,
+                domain="biz",
+                schema_name="biz",
+                table_name="sub_month",
+                column_name="region",
+                op="in",
+                values=["华东"],
+            )
+        )
+
+
 def seed_tenant_bootstrap(engine: Engine, default_database_url: str | None = None) -> None:
     """Idempotent org/workspace/demo user/default datasource + legacy workspace_id backfill."""
     url = default_database_url if default_database_url is not None else settings.database_url
@@ -108,7 +171,7 @@ def seed_tenant_bootstrap(engine: Engine, default_database_url: str | None = Non
     with Session(engine) as session:
         existing_org = session.exec(select(TiOrg)).first()
         if existing_org is None:
-            org = TiOrg(name="演示运营商")
+            org = TiOrg(name="演示运营商", rls_admin_bypass=True)
             session.add(org)
             session.flush()
 
@@ -180,6 +243,8 @@ def seed_tenant_bootstrap(engine: Engine, default_database_url: str | None = Non
 
         if workspace is not None and workspace.id is not None:
             _backfill_workspace_id(session, workspace.id)
+            if demo_org is not None:
+                _ensure_analyst_rls_seed(session, demo_org, workspace)
 
         session.commit()
 
