@@ -537,6 +537,12 @@ function asBranding(data: Branding): Branding {
     preset_id: data.preset_id,
     color_mode: data.color_mode,
     colors: data.colors ?? {},
+    primary: data.primary,
+    primary_soft: data.primary_soft,
+    bg: data.bg,
+    surface: data.surface,
+    text: data.text,
+    muted: data.muted,
   };
 }
 

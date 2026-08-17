@@ -123,7 +123,7 @@ onMounted(() => {
   margin-bottom: 1rem;
   border-radius: var(--radius);
   background: var(--accent-soft);
-  border: 1px solid #ccfbf1;
+  border: 1px solid var(--line);
 }
 
 .hero-logo {
@@ -190,7 +190,7 @@ button[type="submit"] {
 }
 
 button[type="submit"]:hover:not(:disabled) {
-  background: #d5f5ef;
+  background: color-mix(in srgb, var(--accent-soft) 72%, var(--accent) 28%);
   border-color: var(--accent-ink);
 }
 
