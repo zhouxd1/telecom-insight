@@ -8,6 +8,7 @@ from apps.engine.chart import build_chart_option
 from apps.engine.clarify import needs_clarification
 from apps.engine.executor import execute_select
 from apps.engine.llm import LLMClient
+from apps.engine.rls import RlsPredicate, apply_rls, format_rls_prompt
 from apps.engine.schema_rag import retrieve_schema_context
 from apps.engine.sql_guard import SqlGuardError, guard_sql
 from apps.packs.models import Example, IndustryPack, Term
@@ -68,6 +69,7 @@ class AskEngine:
         extra_terms: list[Term] | None = None,
         extra_examples: list[Example] | None = None,
         dialect: str | None = None,
+        rls_predicates: list[RlsPredicate] | None = None,
     ) -> AskResponse:
         pack = self.packs.get(req.domain)
         if not pack:
@@ -83,6 +85,10 @@ class AskEngine:
 
         schema_ctx = retrieve_schema_context(pack, req.question)
         terminology, examples = merge_pack_context(pack, extra_terms, extra_examples)
+        if rls_predicates:
+            rls_prompt = format_rls_prompt(rls_predicates)
+            if rls_prompt:
+                terminology = f"{terminology}\n{rls_prompt}" if terminology else rls_prompt
         guard_dialect = dialect if dialect is not None else self.dialect
         try:
             sql = self.llm.generate_sql(
@@ -92,6 +98,9 @@ class AskEngine:
                 terminology=terminology,
             )
             sql = guard_sql(sql, set(pack.table_whitelist), dialect=guard_dialect)
+            if rls_predicates:
+                sql = apply_rls(sql, rls_predicates, dialect=guard_dialect)
+                sql = guard_sql(sql, set(pack.table_whitelist), dialect=guard_dialect)
             rows, truncated = execute_select(self.warehouse, sql, max_rows=self.max_rows)
             narrative = self.llm.narrate(question=req.question, sql=sql, rows_preview=rows)
             chart = build_chart_option(rows)
