@@ -5,15 +5,25 @@
         <h1>外观设置</h1>
         <p>配置组织品牌名称、主题色、Logo，并在右侧实时预览。</p>
       </div>
-      <button type="button" class="primary" :disabled="saving || loading" @click="onSave">
+      <button
+        v-if="isOrgAdmin"
+        type="button"
+        class="primary"
+        :disabled="saving || loading"
+        @click="onSave"
+      >
         {{ saving ? "保存中…" : "保存" }}
       </button>
     </header>
 
+    <p v-if="!isOrgAdmin && meLoaded" class="banner error" role="alert">
+      仅组织管理员可管理外观设置。
+    </p>
     <p v-if="error" class="banner error" role="alert">{{ error }}</p>
     <p v-if="note" class="banner ok">{{ note }}</p>
 
     <div v-if="loading" class="empty">加载中…</div>
+    <div v-else-if="!isOrgAdmin" class="empty">无权编辑组织外观。</div>
 
     <div v-else class="branding-layout">
       <form class="branding-form table-card" @submit.prevent="onSave">
@@ -185,12 +195,14 @@ import { computed, inject, nextTick, onMounted, onUnmounted, reactive, ref, watc
 import {
   deleteBrandingFavicon,
   deleteBrandingLogo,
+  fetchMe,
   fetchOrgBranding,
   friendlyError,
   updateOrgBranding,
   uploadBrandingFavicon,
   uploadBrandingLogo,
   type BrandingUpdatePayload,
+  type MeResponse,
 } from "../../api";
 import {
   applyBranding,
@@ -230,6 +242,7 @@ const presetOptions = [
 
 const reloadBranding = inject<(() => Promise<void>) | undefined>("reloadBranding");
 const shellBranding = inject<Ref<Branding | null> | undefined>("branding");
+const meInject = inject<Ref<MeResponse | null> | undefined>("me");
 
 const loading = ref(true);
 const saving = ref(false);
@@ -237,6 +250,8 @@ const uploadingLogo = ref(false);
 const uploadingFavicon = ref(false);
 const error = ref("");
 const note = ref("");
+const meLoaded = ref(false);
+const isOrgAdmin = ref(false);
 const previewRoot = ref<HTMLElement | null>(null);
 
 const form = reactive({
@@ -365,6 +380,12 @@ function hydrate(b: Branding) {
   form.favicon_src = b.favicon_src || "/logo.svg";
 }
 
+/** Keep unsaved draft fields; only refresh asset URLs from server response. */
+function mergeAssetsFrom(saved: Branding) {
+  form.logo_src = saved.logo_src || "/logo.svg";
+  form.favicon_src = saved.favicon_src || "/logo.svg";
+}
+
 function buildUpdatePayload(): BrandingUpdatePayload {
   return {
     product_name: form.product_name.trim(),
@@ -389,7 +410,32 @@ async function syncShell(b: Branding) {
   }
 }
 
+/** Shell logo/favicon from server assets + current draft theme/copy. */
+function shellBrandingFromDraft(savedAssets: Branding): Branding {
+  return {
+    ...draftBranding.value,
+    logo_src: savedAssets.logo_src || draftBranding.value.logo_src,
+    favicon_src: savedAssets.favicon_src || draftBranding.value.favicon_src,
+  };
+}
+
+async function resolveAdminAccess() {
+  try {
+    const role = meInject?.value?.org_role ?? (await fetchMe()).org_role;
+    isOrgAdmin.value = role === "org_admin";
+  } catch (err) {
+    error.value = friendlyError(err);
+    isOrgAdmin.value = false;
+  } finally {
+    meLoaded.value = true;
+  }
+}
+
 async function refresh() {
+  if (!isOrgAdmin.value) {
+    loading.value = false;
+    return;
+  }
   loading.value = true;
   error.value = "";
   try {
@@ -405,6 +451,7 @@ async function refresh() {
 }
 
 async function onSave() {
+  if (!isOrgAdmin.value) return;
   saving.value = true;
   error.value = "";
   try {
@@ -422,6 +469,7 @@ async function onSave() {
 }
 
 async function onLogoFile(event: Event) {
+  if (!isOrgAdmin.value) return;
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
   input.value = "";
@@ -430,8 +478,8 @@ async function onLogoFile(event: Event) {
   error.value = "";
   try {
     const saved = await uploadBrandingLogo(file);
-    hydrate(saved);
-    await syncShell(saved);
+    mergeAssetsFrom(saved);
+    await syncShell(shellBrandingFromDraft(saved));
     showNote("Logo 已上传。");
   } catch (err) {
     error.value = friendlyError(err);
@@ -441,13 +489,14 @@ async function onLogoFile(event: Event) {
 }
 
 async function onDeleteLogo() {
+  if (!isOrgAdmin.value) return;
   if (!window.confirm("确认删除已上传的 Logo？")) return;
   uploadingLogo.value = true;
   error.value = "";
   try {
     const saved = await deleteBrandingLogo();
-    hydrate(saved);
-    await syncShell(saved);
+    mergeAssetsFrom(saved);
+    await syncShell(shellBrandingFromDraft(saved));
     showNote("Logo 已删除。");
   } catch (err) {
     error.value = friendlyError(err);
@@ -457,6 +506,7 @@ async function onDeleteLogo() {
 }
 
 async function onFaviconFile(event: Event) {
+  if (!isOrgAdmin.value) return;
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
   input.value = "";
@@ -465,8 +515,8 @@ async function onFaviconFile(event: Event) {
   error.value = "";
   try {
     const saved = await uploadBrandingFavicon(file);
-    hydrate(saved);
-    await syncShell(saved);
+    mergeAssetsFrom(saved);
+    await syncShell(shellBrandingFromDraft(saved));
     showNote("Favicon 已上传。");
   } catch (err) {
     error.value = friendlyError(err);
@@ -476,13 +526,14 @@ async function onFaviconFile(event: Event) {
 }
 
 async function onDeleteFavicon() {
+  if (!isOrgAdmin.value) return;
   if (!window.confirm("确认删除已上传的 Favicon？")) return;
   uploadingFavicon.value = true;
   error.value = "";
   try {
     const saved = await deleteBrandingFavicon();
-    hydrate(saved);
-    await syncShell(saved);
+    mergeAssetsFrom(saved);
+    await syncShell(shellBrandingFromDraft(saved));
     showNote("Favicon 已删除。");
   } catch (err) {
     error.value = friendlyError(err);
@@ -493,8 +544,13 @@ async function onDeleteFavicon() {
 
 watch(draftBranding, () => schedulePreview(), { deep: true });
 
-onMounted(() => {
-  void refresh();
+onMounted(async () => {
+  await resolveAdminAccess();
+  if (isOrgAdmin.value) {
+    await refresh();
+  } else {
+    loading.value = false;
+  }
 });
 
 onUnmounted(() => {
