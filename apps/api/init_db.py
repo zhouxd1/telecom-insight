@@ -15,6 +15,7 @@ from apps.api.models_db import (
     TiChatSession,
     TiDatasource,
     TiOrg,
+    TiOrgBranding,
     TiSqlExample,
     TiTerm,
     TiUser,
@@ -145,7 +146,9 @@ def seed_tenant_bootstrap(engine: Engine, default_database_url: str | None = Non
                 )
             )
             session.flush()
+            demo_org = org
         else:
+            demo_org = existing_org
             workspace = session.exec(
                 select(TiWorkspace).where(
                     TiWorkspace.org_id == existing_org.id,
@@ -162,6 +165,17 @@ def seed_tenant_bootstrap(engine: Engine, default_database_url: str | None = Non
                 ).first()
             if workspace is None:
                 workspace = session.exec(select(TiWorkspace)).first()
+
+        if demo_org is not None and demo_org.id is not None:
+            branding = session.get(TiOrgBranding, demo_org.id)
+            if branding is None:
+                branding = TiOrgBranding(org_id=demo_org.id)
+                session.add(branding)
+            branding.product_name = "元景.智数"
+            branding.tagline = "运营商智能问数"
+            branding.preset_id = "default"
+            branding.color_mode = "light"
+            session.add(branding)
 
         if workspace is not None and workspace.id is not None:
             _backfill_workspace_id(session, workspace.id)

@@ -17,6 +17,29 @@ class TiOrg(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow)
 
 
+class TiOrgBranding(SQLModel, table=True):
+    """1:1 org branding / white-label theme."""
+
+    __tablename__ = "ti_org_branding"
+
+    org_id: int = Field(foreign_key="ti_org.id", primary_key=True)
+    product_name: str = "元景.智数"
+    tagline: str = ""
+    logo_url: Optional[str] = None
+    logo_path: Optional[str] = None
+    favicon_url: Optional[str] = None
+    favicon_path: Optional[str] = None
+    preset_id: str = "default"  # default | ocean | slate | amber
+    color_mode: str = "light"  # light | dark | system
+    primary: Optional[str] = None
+    primary_soft: Optional[str] = None
+    bg: Optional[str] = None
+    surface: Optional[str] = None
+    text: Optional[str] = None
+    muted: Optional[str] = None
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+
 class TiWorkspace(SQLModel, table=True):
     __tablename__ = "ti_workspace"
 
@@ -131,6 +154,7 @@ class TiSqlExample(SQLModel, table=True):
 # Ensure models are imported for metadata registration
 _MODELS: tuple[type[SQLModel], ...] = (
     TiOrg,
+    TiOrgBranding,
     TiWorkspace,
     TiUser,
     TiWorkspaceMember,
