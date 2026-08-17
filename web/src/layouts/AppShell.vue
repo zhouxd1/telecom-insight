@@ -77,6 +77,7 @@ const workspaceId = ref<number | null>(getWorkspaceId());
 const meRef = me as Ref<MeResponse | null>;
 provide("me", meRef);
 provide("workspaceId", workspaceId);
+provide("branding", branding);
 
 const workspaces = computed(() => me.value?.workspaces ?? []);
 
@@ -95,7 +96,7 @@ const roleLabel = computed(() => {
   return role || "";
 });
 
-const primaryNav = [
+const baseNav = [
   { to: "/app/chat", label: "问数工作台" },
   { to: "/app/datasources", label: "数据源" },
   { to: "/app/workspaces", label: "工作空间" },
@@ -104,6 +105,14 @@ const primaryNav = [
   { to: "/app/terms", label: "术语库" },
   { to: "/app/examples", label: "SQL 示例" },
 ] as const;
+
+const primaryNav = computed(() => {
+  const items: { to: string; label: string }[] = [...baseNav];
+  if (me.value?.org_role === "org_admin") {
+    items.push({ to: "/app/branding", label: "外观" });
+  }
+  return items;
+});
 
 async function loadMe() {
   me.value = await fetchMe();
@@ -131,6 +140,8 @@ async function loadBranding() {
     applyBranding(DEFAULT_BRANDING);
   }
 }
+
+provide("reloadBranding", loadBranding);
 
 function onWorkspaceChange(event: Event) {
   const select = event.target as HTMLSelectElement;

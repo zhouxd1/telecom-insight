@@ -9,6 +9,7 @@ import UsersView from "../views/admin/UsersView.vue";
 import ModelsView from "../views/admin/ModelsView.vue";
 import TermsView from "../views/admin/TermsView.vue";
 import ExamplesView from "../views/admin/ExamplesView.vue";
+import BrandingView from "../views/admin/BrandingView.vue";
 
 const router = createRouter({
   history: createWebHistory(),
@@ -26,6 +27,7 @@ const router = createRouter({
         { path: "models", name: "models", component: ModelsView },
         { path: "terms", name: "terms", component: TermsView },
         { path: "examples", name: "examples", component: ExamplesView },
+        { path: "branding", name: "branding", component: BrandingView },
       ],
     },
     {
