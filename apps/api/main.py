@@ -32,6 +32,7 @@ from apps.api.schemas import (
     AskBody,
     DomainInfo,
 )
+from apps.api.seed_catalog import seed_demo_catalog_grants
 from apps.api.settings import settings
 from apps.engine.ask import AskRequest
 from apps.engine.connectors import build_engine_from_datasource
@@ -43,6 +44,7 @@ async def lifespan(_app: FastAPI):
     init_db(engine)
     seed_tenant_bootstrap(engine, default_database_url=settings.database_url)
     seed_pack_catalog(engine, Path(settings.packs_root))
+    seed_demo_catalog_grants(engine)
     yield
 
 
