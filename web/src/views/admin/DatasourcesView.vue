@@ -64,7 +64,7 @@
                 }}</span>
               </td>
               <td class="mono">{{ formatTime(row.last_ok_at) }}</td>
-              <td class="actions" @click.stop>
+              <td class="actions" @click.stop @keydown.stop>
                 <button type="button" @click="onTest(row)">测连</button>
                 <button
                   type="button"
