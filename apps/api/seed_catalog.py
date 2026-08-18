@@ -103,7 +103,7 @@ def _default_workspace_datasource(
 
 
 def seed_demo_catalog_grants(engine: Engine) -> None:
-    """Introspect default DS and PUT grants for biz demo tables; skip if catalog down."""
+    """Seed demo grants only when Catalog effective is empty; skip if catalog down."""
     with Session(engine) as session:
         pair = _default_workspace_datasource(session)
         if pair is None:
@@ -121,6 +121,18 @@ def seed_demo_catalog_grants(engine: Engine) -> None:
         return
 
     try:
+        existing = catalog_client.get_effective(
+            workspace_id=workspace_id,
+            datasource_id=datasource_id,
+        )
+        if not existing.get("empty", True):
+            logger.info(
+                "skip demo catalog grants: workspace=%s datasource=%s already has grants",
+                workspace_id,
+                datasource_id,
+            )
+            return
+
         catalog_client.introspect(
             workspace_id=workspace_id,
             datasource_id=datasource_id,
