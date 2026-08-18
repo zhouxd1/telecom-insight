@@ -1,81 +1,93 @@
 <template>
-  <section class="admin-page">
-    <header class="page-head">
-      <div>
-        <h1>数据源</h1>
-        <p>管理当前工作空间的执行库连接（测连、设默认、库表授权）。</p>
+  <section class="admin-page" :class="{ browsing: !!browsing }">
+    <template v-if="browsing">
+      <p v-if="error" class="banner error" role="alert">{{ error }}</p>
+      <p v-if="note" class="banner ok">{{ note }}</p>
+      <DatasourceBrowser
+        :ds="browsing"
+        :is-org-admin="isOrgAdmin"
+        @back="browsing = null"
+        @note="onBrowserNote"
+        @error="onBrowserError"
+      />
+    </template>
+
+    <template v-else>
+      <header class="page-head">
+        <div>
+          <h1>数据源</h1>
+          <p>管理当前工作空间的执行库连接；点击一行进入库表浏览。</p>
+        </div>
+        <button type="button" class="primary" :disabled="!isOrgAdmin" @click="openCreate">
+          新建数据源
+        </button>
+      </header>
+
+      <p v-if="!isOrgAdmin && meLoaded" class="banner error" role="alert">
+        成员可点击数据源行浏览结构与样例数据；仅组织管理员可新建/编辑数据源、刷新结构与保存字段授权。
+      </p>
+      <p v-if="error" class="banner error" role="alert">{{ error }}</p>
+      <p v-if="note" class="banner ok">{{ note }}</p>
+
+      <div class="table-card">
+        <div v-if="loading" class="empty">加载中…</div>
+        <div v-else-if="!rows.length" class="empty">暂无数据源，点击右上角新建。</div>
+        <table v-else>
+          <thead>
+            <tr>
+              <th>名称</th>
+              <th>类型</th>
+              <th>主机</th>
+              <th>数据库</th>
+              <th>默认</th>
+              <th>最近成功</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="row in rows"
+              :key="row.id"
+              class="clickable-row"
+              role="button"
+              tabindex="0"
+              @click="openBrowser(row)"
+              @keydown="onRowKeydown($event, row)"
+            >
+              <td>{{ row.name }}</td>
+              <td class="mono">{{ row.db_type }}</td>
+              <td class="mono">{{ formatHost(row) }}</td>
+              <td class="mono">{{ row.database || "—" }}</td>
+              <td>
+                <span class="pill" :class="{ on: row.is_default }">{{
+                  row.is_default ? "默认" : "—"
+                }}</span>
+              </td>
+              <td class="mono">{{ formatTime(row.last_ok_at) }}</td>
+              <td class="actions" @click.stop>
+                <button type="button" @click="onTest(row)">测连</button>
+                <button
+                  type="button"
+                  :disabled="!isOrgAdmin || row.is_default"
+                  @click="onSetDefault(row)"
+                >
+                  设默认
+                </button>
+                <button type="button" :disabled="!isOrgAdmin" @click="openEdit(row)">编辑</button>
+                <button
+                  type="button"
+                  class="danger"
+                  :disabled="!isOrgAdmin"
+                  @click="onDelete(row)"
+                >
+                  删除
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-      <button type="button" class="primary" :disabled="!isOrgAdmin" @click="openCreate">
-        新建数据源
-      </button>
-    </header>
-
-    <p v-if="!isOrgAdmin && meLoaded" class="banner error" role="alert">
-      仅组织管理员可新建/编辑数据源，以及刷新结构与字段授权。
-    </p>
-    <p v-if="error" class="banner error" role="alert">{{ error }}</p>
-    <p v-if="note" class="banner ok">{{ note }}</p>
-
-    <div class="table-card">
-      <div v-if="loading" class="empty">加载中…</div>
-      <div v-else-if="!rows.length" class="empty">暂无数据源，点击右上角新建。</div>
-      <table v-else>
-        <thead>
-          <tr>
-            <th>名称</th>
-            <th>类型</th>
-            <th>主机</th>
-            <th>数据库</th>
-            <th>默认</th>
-            <th>最近成功</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in rows" :key="row.id">
-            <td>{{ row.name }}</td>
-            <td class="mono">{{ row.db_type }}</td>
-            <td class="mono">{{ formatHost(row) }}</td>
-            <td class="mono">{{ row.database || "—" }}</td>
-            <td>
-              <span class="pill" :class="{ on: row.is_default }">{{
-                row.is_default ? "默认" : "—"
-              }}</span>
-            </td>
-            <td class="mono">{{ formatTime(row.last_ok_at) }}</td>
-            <td class="actions">
-              <button type="button" @click="onTest(row)">测连</button>
-              <button
-                type="button"
-                :disabled="!isOrgAdmin || row.is_default"
-                @click="onSetDefault(row)"
-              >
-                设默认
-              </button>
-              <button
-                type="button"
-                :disabled="!isOrgAdmin || introspectingId === row.id"
-                @click="onRefreshSchema(row)"
-              >
-                {{ introspectingId === row.id ? "刷新中…" : "刷新结构" }}
-              </button>
-              <button type="button" :disabled="!isOrgAdmin" @click="openGrants(row)">
-                字段授权
-              </button>
-              <button type="button" :disabled="!isOrgAdmin" @click="openEdit(row)">编辑</button>
-              <button
-                type="button"
-                class="danger"
-                :disabled="!isOrgAdmin"
-                @click="onDelete(row)"
-              >
-                删除
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    </template>
 
     <div v-if="dialogOpen" class="modal-backdrop" @click.self="closeDialog">
       <form class="modal" @submit.prevent="onSave">
@@ -134,68 +146,6 @@
         </div>
       </form>
     </div>
-
-    <div v-if="grantsOpen" class="modal-backdrop" @click.self="closeGrants">
-      <div class="modal modal-wide grants-modal" role="dialog" aria-labelledby="grants-title">
-        <header class="grants-head">
-          <div>
-            <h2 id="grants-title">字段授权</h2>
-            <p v-if="grantsDs">
-              {{ grantsDs.name }} · 勾选表时默认全选其列；保存后问数仅可用授权列。
-            </p>
-          </div>
-          <button type="button" class="ghost" @click="closeGrants">关闭</button>
-        </header>
-
-        <p v-if="grantsError" class="banner error" role="alert">{{ grantsError }}</p>
-
-        <div v-if="grantsLoading" class="empty">加载结构…</div>
-        <div v-else-if="!grantTables.length" class="empty">
-          暂无探测结果。请先点击「刷新结构」。
-        </div>
-        <div v-else class="grant-tree">
-          <div v-for="table in grantTables" :key="tableKey(table)" class="grant-table">
-            <label class="grant-table-check">
-              <input
-                type="checkbox"
-                :checked="isTableChecked(table)"
-                :indeterminate.prop="isTableIndeterminate(table)"
-                @change="onToggleTable(table, ($event.target as HTMLInputElement).checked)"
-              />
-              <span class="mono">{{ table.schema_name }}.{{ table.table_name }}</span>
-              <span class="pill">{{ table.columns.length }} 列</span>
-            </label>
-            <ul class="grant-cols">
-              <li v-for="col in table.columns" :key="col.name">
-                <label class="check">
-                  <input
-                    type="checkbox"
-                    :checked="isColumnChecked(table, col.name)"
-                    @change="
-                      onToggleColumn(table, col.name, ($event.target as HTMLInputElement).checked)
-                    "
-                  />
-                  <span class="mono">{{ col.name }}</span>
-                  <span class="col-type">{{ col.data_type || "—" }}</span>
-                </label>
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="modal-actions">
-          <button type="button" class="ghost" @click="closeGrants">取消</button>
-          <button
-            type="button"
-            class="primary"
-            :disabled="grantsSaving || grantsLoading"
-            @click="onSaveGrants"
-          >
-            {{ grantsSaving ? "保存中…" : "保存授权" }}
-          </button>
-        </div>
-      </div>
-    </div>
   </section>
 </template>
 
@@ -204,18 +154,15 @@ import { onMounted, reactive, ref } from "vue";
 import {
   createDatasource,
   deleteDatasource,
-  fetchDatasourceSchema,
   fetchMe,
   friendlyError,
-  introspectDatasource,
   listDatasources,
-  saveDatasourceGrants,
   setDefaultDatasource,
   testDatasource,
   updateDatasource,
   type Datasource,
-  type DatasourceSchemaTable,
 } from "../../api";
+import DatasourceBrowser from "./DatasourceBrowser.vue";
 
 const p0Types = [
   { id: "postgres", label: "PostgreSQL" },
@@ -246,16 +193,7 @@ const dialogOpen = ref(false);
 const editingId = ref<number | null>(null);
 const meLoaded = ref(false);
 const isOrgAdmin = ref(false);
-const introspectingId = ref<number | null>(null);
-
-const grantsOpen = ref(false);
-const grantsDs = ref<Datasource | null>(null);
-const grantTables = ref<DatasourceSchemaTable[]>([]);
-/** Selected column names per `schema.table` key. */
-const selectedColumns = ref<Record<string, Set<string>>>({});
-const grantsLoading = ref(false);
-const grantsSaving = ref(false);
-const grantsError = ref("");
+const browsing = ref<Datasource | null>(null);
 
 const form = reactive({
   name: "",
@@ -282,65 +220,27 @@ function formatTime(value?: string | null): string {
   }
 }
 
-function tableKey(table: Pick<DatasourceSchemaTable, "schema_name" | "table_name">): string {
-  return `${table.schema_name}.${table.table_name}`;
+function openBrowser(row: Datasource) {
+  error.value = "";
+  note.value = "";
+  browsing.value = row;
 }
 
-function isColumnChecked(
-  table: Pick<DatasourceSchemaTable, "schema_name" | "table_name">,
-  columnName: string,
-): boolean {
-  return selectedColumns.value[tableKey(table)]?.has(columnName) ?? false;
-}
-
-function isTableChecked(table: DatasourceSchemaTable): boolean {
-  const selected = selectedColumns.value[tableKey(table)];
-  if (!table.columns.length) return selected != null;
-  if (!selected) return false;
-  return table.columns.every((c) => selected.has(c.name));
-}
-
-function isTableIndeterminate(table: DatasourceSchemaTable): boolean {
-  const selected = selectedColumns.value[tableKey(table)];
-  if (!selected || !table.columns.length) return false;
-  const count = table.columns.filter((c) => selected.has(c.name)).length;
-  return count > 0 && count < table.columns.length;
-}
-
-function onToggleTable(table: DatasourceSchemaTable, checked: boolean) {
-  const key = tableKey(table);
-  if (checked) {
-    // Checking a table selects all its columns by default.
-    selectedColumns.value = {
-      ...selectedColumns.value,
-      [key]: new Set(table.columns.map((c) => c.name)),
-    };
-  } else {
-    const next = { ...selectedColumns.value };
-    delete next[key];
-    selectedColumns.value = next;
+function onRowKeydown(event: KeyboardEvent, row: Datasource) {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    openBrowser(row);
   }
 }
 
-function onToggleColumn(
-  table: DatasourceSchemaTable,
-  columnName: string,
-  checked: boolean,
-) {
-  const key = tableKey(table);
-  const next = new Set(selectedColumns.value[key] ?? []);
-  if (checked) {
-    next.add(columnName);
-  } else {
-    next.delete(columnName);
-  }
-  if (next.size === 0) {
-    const copy = { ...selectedColumns.value };
-    delete copy[key];
-    selectedColumns.value = copy;
-  } else {
-    selectedColumns.value = { ...selectedColumns.value, [key]: next };
-  }
+function onBrowserNote(message: string) {
+  error.value = "";
+  note.value = message;
+}
+
+function onBrowserError(message: string) {
+  note.value = "";
+  error.value = message;
 }
 
 async function loadMe() {
@@ -485,88 +385,6 @@ async function onSetDefault(row: Datasource) {
   }
 }
 
-async function onRefreshSchema(row: Datasource) {
-  if (!isOrgAdmin.value) return;
-  introspectingId.value = row.id;
-  error.value = "";
-  note.value = "";
-  try {
-    const result = await introspectDatasource(row.id);
-    note.value = `已刷新「${row.name}」结构：${result.tables} 表 / ${result.columns} 列`;
-  } catch (err) {
-    error.value = friendlyError(err);
-  } finally {
-    introspectingId.value = null;
-  }
-}
-
-async function openGrants(row: Datasource) {
-  if (!isOrgAdmin.value) return;
-  grantsDs.value = row;
-  grantsOpen.value = true;
-  grantsError.value = "";
-  grantsLoading.value = true;
-  grantTables.value = [];
-  selectedColumns.value = {};
-  try {
-    const schema = await fetchDatasourceSchema(row.id);
-    grantTables.value = schema.tables ?? [];
-    const next: Record<string, Set<string>> = {};
-    for (const table of grantTables.value) {
-      const cols = table.columns.filter((c) => c.granted).map((c) => c.name);
-      if (table.granted || cols.length) {
-        // Prefer explicit column grants; if table granted with no column flags, select all.
-        next[tableKey(table)] = new Set(
-          cols.length ? cols : table.columns.map((c) => c.name),
-        );
-      }
-    }
-    selectedColumns.value = next;
-  } catch (err) {
-    grantsError.value = friendlyError(err);
-  } finally {
-    grantsLoading.value = false;
-  }
-}
-
-function closeGrants() {
-  grantsOpen.value = false;
-  grantsDs.value = null;
-  grantTables.value = [];
-  selectedColumns.value = {};
-  grantsError.value = "";
-}
-
-async function onSaveGrants() {
-  if (!isOrgAdmin.value || !grantsDs.value) return;
-  grantsSaving.value = true;
-  grantsError.value = "";
-  error.value = "";
-  note.value = "";
-  try {
-    const tables = grantTables.value
-      .map((table) => {
-        const key = tableKey(table);
-        const selected = selectedColumns.value[key];
-        if (!selected || selected.size === 0) return null;
-        return {
-          schema_name: table.schema_name,
-          table_name: table.table_name,
-          columns: table.columns.map((c) => c.name).filter((name) => selected.has(name)),
-        };
-      })
-      .filter((t): t is NonNullable<typeof t> => t != null && t.columns.length > 0);
-
-    const result = await saveDatasourceGrants(grantsDs.value.id, tables);
-    note.value = `已保存「${grantsDs.value.name}」授权：${result.tables} 表 / ${result.columns} 列`;
-    closeGrants();
-  } catch (err) {
-    grantsError.value = friendlyError(err);
-  } finally {
-    grantsSaving.value = false;
-  }
-}
-
 onMounted(() => {
   void loadMe().then(() => refresh());
 });
@@ -574,87 +392,20 @@ onMounted(() => {
 
 <style src="./admin-shared.css"></style>
 <style scoped>
-.modal-wide {
-  width: min(640px, 100%);
-  max-height: min(90vh, 860px);
-  overflow: auto;
+.admin-page.browsing {
+  max-width: 1280px;
 }
 
-.grants-modal {
-  display: grid;
-  gap: 0.85rem;
-  align-content: start;
+.clickable-row {
+  cursor: pointer;
 }
 
-.grants-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.grants-head h2 {
-  margin: 0;
-}
-
-.grants-head p {
-  margin: 0.35rem 0 0;
-  color: var(--muted);
-  font-size: 0.82rem;
-  line-height: 1.45;
-}
-
-.grant-tree {
-  display: grid;
-  gap: 0.65rem;
-  max-height: min(55vh, 520px);
-  overflow: auto;
-  padding-right: 0.15rem;
-}
-
-.grant-table {
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+.clickable-row:hover td {
   background: var(--surface-muted);
-  padding: 0.55rem 0.7rem 0.65rem;
 }
 
-.grant-table-check {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.45rem 0.65rem;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.grant-table-check input {
-  width: auto;
-  margin: 0;
-}
-
-.grant-cols {
-  list-style: none;
-  margin: 0.55rem 0 0;
-  padding: 0 0 0 1.35rem;
-  display: grid;
-  gap: 0.35rem;
-}
-
-.grant-cols .check {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem 0.55rem;
-}
-
-.grant-cols .check input {
-  width: auto;
-  margin: 0;
-}
-
-.col-type {
-  font-size: 0.75rem;
-  color: var(--muted);
+.clickable-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 </style>

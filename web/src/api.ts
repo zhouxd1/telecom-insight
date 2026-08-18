@@ -94,13 +94,25 @@ export type DatasourceSchemaColumn = {
   data_type: string;
   nullable: boolean;
   granted: boolean;
+  ordinal_position?: number;
+  column_default?: string | null;
+  is_primary_key?: boolean;
+  column_comment?: string | null;
 };
 
 export type DatasourceSchemaTable = {
   schema_name: string;
   table_name: string;
   granted: boolean;
+  table_kind?: string;
+  table_comment?: string | null;
   columns: DatasourceSchemaColumn[];
+};
+
+export type DatasourcePreview = {
+  columns: string[];
+  rows: Array<Record<string, unknown>>;
+  truncated: boolean;
 };
 
 export type DatasourceSchema = {
@@ -439,6 +451,19 @@ export async function saveDatasourceGrants(
   const { data } = await client.put<DatasourceGrantsSaveResult>(
     `/admin/datasources/${id}/grants`,
     { tables },
+  );
+  return data;
+}
+
+export async function previewDatasourceTable(
+  id: number,
+  schema: string,
+  table: string,
+  limit = 50,
+): Promise<DatasourcePreview> {
+  const { data } = await client.get<DatasourcePreview>(
+    `/admin/datasources/${id}/preview`,
+    { params: { schema, table, limit } },
   );
   return data;
 }
