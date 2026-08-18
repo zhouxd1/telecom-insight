@@ -37,7 +37,9 @@
 ## Schema Catalog & field ACL
 
 - **Catalog 服务**：外挂 FastAPI（Compose 服务 `catalog`），默认 **http://localhost:8001**；主 API 经 `TI_CATALOG_BASE_URL` 调用（Compose 内为 `http://catalog:8001`）
-- **授权流程**（数据源页，仅 `org_admin`）：「刷新结构」探测并快照表/列 →「字段授权」勾选工作空间可用表与列并保存
+- **库表浏览**：数据源列表**点一行**进入库表浏览（左表树，右「结构 | 数据」；结构含类型/默认/主键/注释；数据为只读预览 LIMIT 50）
+- **预览与授权**：预览不检查字段授权；问数仍空授权拒绝、未授权列拒绝
+- **角色**：仅 `org_admin` 可刷新结构与保存勾选；成员可浏览结构与预览
 - **Ask 生效规则**：表白名单与列允许集来自 Catalog `effective`（Pack `table_whitelist` 不再作为真相）；**空授权拒绝 Ask**；未授权列拒绝（不遮罩）
 - **演示种子**：启动时对演示默认源预授权 `biz.sub_month` / `biz.channel_day` 等核心列，保证 `demo` 开箱可问
 
