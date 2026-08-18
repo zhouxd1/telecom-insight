@@ -1,6 +1,42 @@
 from sqlalchemy import Column, Integer, MetaData, String, Table, create_engine
 
-from apps.engine.schema_introspect import introspect_tables
+from apps.engine.schema_introspect import _format_pg_data_type, introspect_tables
+
+
+def test_format_pg_data_type_varchar_numeric_integer():
+    assert (
+        _format_pg_data_type(
+            {
+                "data_type": "character varying",
+                "character_maximum_length": 64,
+                "numeric_precision": None,
+                "numeric_scale": None,
+            }
+        )
+        == "character varying(64)"
+    )
+    assert (
+        _format_pg_data_type(
+            {
+                "data_type": "numeric",
+                "character_maximum_length": None,
+                "numeric_precision": 10,
+                "numeric_scale": 2,
+            }
+        )
+        == "numeric(10,2)"
+    )
+    assert (
+        _format_pg_data_type(
+            {
+                "data_type": "integer",
+                "character_maximum_length": None,
+                "numeric_precision": 32,
+                "numeric_scale": 0,
+            }
+        )
+        == "integer"
+    )
 
 
 def test_introspect_sqlite_in_memory():

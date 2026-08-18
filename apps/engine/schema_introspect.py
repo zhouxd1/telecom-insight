@@ -115,7 +115,7 @@ def _format_pg_data_type(row: dict[str, Any]) -> str:
     data_type = row["data_type"]
     if row.get("character_maximum_length") is not None:
         return f"{data_type}({row['character_maximum_length']})"
-    if row.get("numeric_precision") is not None:
+    if data_type in {"numeric", "decimal"} and row.get("numeric_precision") is not None:
         scale = row.get("numeric_scale") or 0
         return f"{data_type}({row['numeric_precision']},{scale})"
     return data_type
@@ -229,16 +229,7 @@ def _introspect_postgres(engine: Engine) -> list[dict[str, Any]]:
             except Exception:
                 pass
     except Exception:
-        return [
-            _table_dict(
-                schema,
-                name,
-                cols,
-                table_kind=table_kinds.get((schema, name), "table"),
-                table_comment=table_comments.get((schema, name)),
-            )
-            for (schema, name), cols in tables.items()
-        ]
+        pass
 
     for key, cols in tables.items():
         schema, name = key
