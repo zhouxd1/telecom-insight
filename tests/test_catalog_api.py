@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import Column, Integer, MetaData, String, Table, create_engine
+from sqlalchemy import Column, Integer, MetaData, String, Table, create_engine, inspect, text
 
 from apps.catalog import db
 from apps.catalog.main import app
+from apps.catalog.migrate import ensure_catalog_columns
 from apps.catalog.settings import settings
 
 
@@ -48,6 +49,64 @@ def test_health(catalog_client: TestClient):
     r = catalog_client.get("/health")
     assert r.status_code == 200
     assert r.json() == {"status": "ok", "service": "catalog"}
+
+
+def test_ensure_catalog_columns_adds_missing_on_legacy_sqlite(tmp_path):
+    """Migrate old cat_table/cat_column schemas; BOOLEAN DEFAULT FALSE must work on SQLite."""
+    db_path = tmp_path / "legacy_catalog.db"
+    engine = create_engine(f"sqlite:///{db_path}")
+    if engine.dialect.name != "sqlite":
+        pytest.skip("legacy migrate fixture uses SQLite DDL")
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE cat_table (
+                    id INTEGER PRIMARY KEY,
+                    datasource_id INTEGER NOT NULL,
+                    schema_name VARCHAR NOT NULL,
+                    table_name VARCHAR NOT NULL,
+                    refreshed_at DATETIME NOT NULL
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE cat_column (
+                    id INTEGER PRIMARY KEY,
+                    table_id INTEGER NOT NULL,
+                    column_name VARCHAR NOT NULL,
+                    data_type VARCHAR NOT NULL DEFAULT '',
+                    nullable BOOLEAN NOT NULL DEFAULT 1,
+                    FOREIGN KEY(table_id) REFERENCES cat_table (id)
+                )
+                """
+            )
+        )
+
+    before_table = {c["name"] for c in inspect(engine).get_columns("cat_table")}
+    before_column = {c["name"] for c in inspect(engine).get_columns("cat_column")}
+    assert "table_kind" not in before_table
+    assert "is_primary_key" not in before_column
+
+    ensure_catalog_columns(engine)
+
+    after_table = {c["name"] for c in inspect(engine).get_columns("cat_table")}
+    after_column = {c["name"] for c in inspect(engine).get_columns("cat_column")}
+    assert {"table_kind", "table_comment"} <= after_table
+    assert {
+        "ordinal_position",
+        "column_default",
+        "is_primary_key",
+        "column_comment",
+    } <= after_column
+
+    # Second call is a no-op (idempotent).
+    ensure_catalog_columns(engine)
+    engine.dispose()
 
 
 def test_introspect_schema_grants_effective(
