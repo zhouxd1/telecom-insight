@@ -204,7 +204,7 @@ const activeTab = ref<"structure" | "data">("structure");
 const selectedColumns = ref<Record<string, Set<string>>>({});
 const preview = ref<DatasourcePreview | null>(null);
 const previewLoading = ref(false);
-const previewKey = ref("");
+const previewSeq = ref(0);
 
 const schemaGroups = computed(() => {
   const map = new Map<string, DatasourceSchemaTable[]>();
@@ -350,7 +350,9 @@ async function loadSchema() {
     applyGrantedSelection(tables.value);
     restoreSelection(prev);
     preview.value = null;
-    previewKey.value = "";
+    if (activeTab.value === "data" && selected.value) {
+      void loadPreview();
+    }
   } catch (err) {
     emit("error", friendlyError(err));
   } finally {
@@ -416,23 +418,34 @@ async function loadPreview() {
     preview.value = null;
     return;
   }
-  const key = `${tableKey(selected.value)}@50`;
-  if (previewKey.value === key && preview.value) return;
+  const schemaName = selected.value.schema_name;
+  const tableName = selected.value.table_name;
+  const seq = ++previewSeq.value;
   previewLoading.value = true;
   try {
-    preview.value = await previewDatasourceTable(
-      props.ds.id,
-      selected.value.schema_name,
-      selected.value.table_name,
-      50,
-    );
-    previewKey.value = key;
+    const result = await previewDatasourceTable(props.ds.id, schemaName, tableName, 50);
+    if (
+      !selected.value ||
+      selected.value.schema_name !== schemaName ||
+      selected.value.table_name !== tableName
+    ) {
+      return;
+    }
+    preview.value = result;
   } catch (err) {
+    if (
+      !selected.value ||
+      selected.value.schema_name !== schemaName ||
+      selected.value.table_name !== tableName
+    ) {
+      return;
+    }
     preview.value = null;
-    previewKey.value = "";
     emit("error", friendlyError(err));
   } finally {
-    previewLoading.value = false;
+    if (seq === previewSeq.value) {
+      previewLoading.value = false;
+    }
   }
 }
 
@@ -442,7 +455,6 @@ watch(
     selected.value = null;
     activeTab.value = "structure";
     preview.value = null;
-    previewKey.value = "";
     void loadSchema();
   },
 );
