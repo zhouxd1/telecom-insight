@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from sqlmodel import SQLModel
 
 from apps.catalog.db import get_engine
+from apps.catalog.migrate import ensure_catalog_columns
 from apps.catalog.routes import router
 
 
@@ -13,6 +14,7 @@ async def lifespan(_app: FastAPI):
     import apps.catalog.models  # noqa: F401
 
     SQLModel.metadata.create_all(get_engine())
+    ensure_catalog_columns(get_engine())
     yield
 
 

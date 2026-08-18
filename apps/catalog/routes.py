@@ -126,6 +126,8 @@ def post_introspect(
             datasource_id=body.datasource_id,
             schema_name=row["schema_name"],
             table_name=row["table_name"],
+            table_kind=str(row.get("table_kind") or "table"),
+            table_comment=str(row.get("table_comment") or ""),
             refreshed_at=now,
         )
         session.add(table)
@@ -137,6 +139,10 @@ def post_introspect(
                     column_name=col["name"],
                     data_type=str(col.get("data_type") or ""),
                     nullable=bool(col.get("nullable", True)),
+                    ordinal_position=int(col.get("ordinal_position") or 0),
+                    column_default=str(col.get("column_default") or ""),
+                    is_primary_key=bool(col.get("is_primary_key", False)),
+                    column_comment=str(col.get("column_comment") or ""),
                 )
             )
     session.commit()
@@ -181,12 +187,18 @@ def get_schema(
             {
                 "schema_name": t.schema_name,
                 "table_name": t.table_name,
+                "table_kind": t.table_kind,
+                "table_comment": t.table_comment,
                 "granted": key in table_grants,
                 "columns": [
                     {
                         "name": c.column_name,
                         "data_type": c.data_type,
                         "nullable": c.nullable,
+                        "ordinal_position": c.ordinal_position,
+                        "column_default": c.column_default,
+                        "is_primary_key": c.is_primary_key,
+                        "column_comment": c.column_comment,
                         "granted": (t.schema_name, t.table_name, c.column_name)
                         in col_grants,
                     }

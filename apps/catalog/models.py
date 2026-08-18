@@ -26,6 +26,8 @@ class CatTable(SQLModel, table=True):
     datasource_id: int = Field(index=True)
     schema_name: str
     table_name: str
+    table_kind: str = "table"
+    table_comment: str = ""
     refreshed_at: datetime = Field(default_factory=_utcnow)
 
 
@@ -37,6 +39,10 @@ class CatColumn(SQLModel, table=True):
     column_name: str
     data_type: str = ""
     nullable: bool = True
+    ordinal_position: int = 0
+    column_default: str = ""
+    is_primary_key: bool = False
+    column_comment: str = ""
 
 
 class CatWsTableGrant(SQLModel, table=True):

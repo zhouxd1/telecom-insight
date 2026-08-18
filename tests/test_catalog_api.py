@@ -87,6 +87,15 @@ def test_introspect_schema_grants_effective(
     assert col_names == {"region", "sub_cnt"}
     assert all(c["granted"] is False for c in by_name["sub_month"]["columns"])
 
+    sub = by_name["sub_month"]
+    assert sub["table_kind"] in {"table", "view"}
+    assert "table_comment" in sub
+    region = next(c for c in sub["columns"] if c["name"] == "region")
+    assert "ordinal_position" in region
+    assert "column_default" in region
+    assert "is_primary_key" in region
+    assert "column_comment" in region
+
     schema_name = by_name["sub_month"]["schema_name"]
     grants = catalog_client.put(
         "/v1/workspaces/1/grants",
