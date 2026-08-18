@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session, select
 
 from apps.api import catalog_client
@@ -13,8 +13,9 @@ from apps.api.acl import EffectiveAccess
 from apps.api.crypto import decrypt_secret, encrypt_secret
 from apps.api.db import get_session
 from apps.api.db_types import build_sqlalchemy_url, is_p0, is_p1
-from apps.api.deps import require_workspace
-from apps.api.models_db import TiDatasource, TiWorkspace
+from apps.api.deps import dialect_for_datasource, get_current_user, require_workspace
+from apps.api.models_db import TiDatasource, TiUser, TiWorkspace
+from apps.api.rls_load import get_workspace_member, load_rls_predicates
 from apps.api.schemas import (
     DatasourceCreate,
     DatasourceGrantsPut,
@@ -23,6 +24,11 @@ from apps.api.schemas import (
     DatasourceUpdate,
 )
 from apps.engine import connectors
+from apps.engine.connectors import build_engine_from_datasource
+from apps.engine.executor import execute_select
+from apps.engine.preview_sql import build_preview_sql
+from apps.engine.rls import apply_rls
+from apps.engine.sql_guard import SqlGuardError, guard_sql
 
 router = APIRouter(prefix="/admin/datasources", tags=["datasources"])
 
@@ -325,3 +331,58 @@ def put_datasource_grants(
         datasource_id=ds_id,
         tables=tables,
     )
+
+
+@router.get("/{ds_id}/preview")
+def preview_datasource_table(
+    ds_id: int,
+    schema: str = Query(..., min_length=1),
+    table: str = Query(..., min_length=1),
+    limit: int = Query(50, ge=1, le=200),
+    session: Session = Depends(get_session),
+    ws_access: tuple[TiWorkspace, EffectiveAccess] = Depends(require_workspace),
+    user: TiUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    workspace, _access = ws_access
+    row = _get_workspace_ds(session, ds_id, workspace)
+    tree = catalog_client.get_schema(
+        workspace_id=workspace.id,  # type: ignore[arg-type]
+        datasource_id=ds_id,
+    )
+    match = next(
+        (
+            t
+            for t in (tree.get("tables") or [])
+            if t.get("schema_name") == schema and t.get("table_name") == table
+        ),
+        None,
+    )
+    if match is None:
+        raise HTTPException(status_code=404, detail="table not in catalog snapshot")
+    col_names = [c["name"] for c in (match.get("columns") or []) if c.get("name")]
+    dialect = dialect_for_datasource(row)
+    try:
+        sql = build_preview_sql(
+            schema, table, col_names, dialect=dialect, limit=limit
+        )
+        sql = guard_sql(sql, {table}, dialect=dialect)
+        member = get_workspace_member(session, workspace.id, user.id)  # type: ignore[arg-type]
+        preds = load_rls_predicates(session, user, workspace, member)
+        if preds:
+            sql = apply_rls(sql, preds, dialect=dialect)
+            sql = guard_sql(sql, {table}, dialect=dialect)
+        engine = build_engine_from_datasource(row)
+        try:
+            rows, truncated = execute_select(engine, sql, max_rows=limit)
+        finally:
+            engine.dispose()
+    except SqlGuardError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail="数据源连接失败，请检查数据源配置后重试。",
+        )
+    return {"columns": col_names, "rows": rows, "truncated": truncated}
